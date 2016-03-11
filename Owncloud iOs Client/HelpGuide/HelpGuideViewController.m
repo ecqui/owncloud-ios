@@ -203,7 +203,7 @@
 }
 
 - (void)configureView0 {
-    self.owncloudLogo = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"companyLogoHelp"]];
+    self.owncloudLogo = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"CompanyLogo"]];
     [self.contentView addSubview:self.owncloudLogo];
 }
 
