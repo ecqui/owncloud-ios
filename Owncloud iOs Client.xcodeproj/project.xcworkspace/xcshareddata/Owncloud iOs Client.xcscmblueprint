@@ -1,0 +1,30 @@
+{
+  "DVTSourceControlWorkspaceBlueprintPrimaryRemoteRepositoryKey" : "47FF8B27927D8E36E4C5E319D127A9C8EA90B234",
+  "DVTSourceControlWorkspaceBlueprintWorkingCopyRepositoryLocationsKey" : {
+
+  },
+  "DVTSourceControlWorkspaceBlueprintWorkingCopyStatesKey" : {
+    "4B419C9897F7942ABC1B74203B98787E82498DA2" : 0,
+    "47FF8B27927D8E36E4C5E319D127A9C8EA90B234" : 0
+  },
+  "DVTSourceControlWorkspaceBlueprintIdentifierKey" : "E2B337C6-365C-49B8-B64F-810F7F05F535",
+  "DVTSourceControlWorkspaceBlueprintWorkingCopyPathsKey" : {
+    "4B419C9897F7942ABC1B74203B98787E82498DA2" : "owncloud-ios\/OCCommunicationLib\/",
+    "47FF8B27927D8E36E4C5E319D127A9C8EA90B234" : "owncloud-ios\/"
+  },
+  "DVTSourceControlWorkspaceBlueprintNameKey" : "Owncloud iOs Client",
+  "DVTSourceControlWorkspaceBlueprintVersion" : 204,
+  "DVTSourceControlWorkspaceBlueprintRelativePathToProjectKey" : "Owncloud iOs Client.xcodeproj",
+  "DVTSourceControlWorkspaceBlueprintRemoteRepositoriesKey" : [
+    {
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryURLKey" : "https:\/\/github.com\/ecqui\/owncloud-ios.git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositorySystemKey" : "com.apple.dt.Xcode.sourcecontrol.Git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryIdentifierKey" : "47FF8B27927D8E36E4C5E319D127A9C8EA90B234"
+    },
+    {
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryURLKey" : "https:\/\/github.com\/owncloud\/ios-library.git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositorySystemKey" : "com.apple.dt.Xcode.sourcecontrol.Git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryIdentifierKey" : "4B419C9897F7942ABC1B74203B98787E82498DA2"
+    }
+  ]
+}
