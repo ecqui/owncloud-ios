@@ -21,11 +21,11 @@
 
 //Tint color of navigation bar
 + (UIColor*)colorOfNavigationBar{
-    return [UIColor colorWithRed:28/255.0f green:44/255.0f blue:67/255.0f alpha:1.0];
+    return [UIColor colorWithRed:252/255.0f green:115/255.0f blue:0/255.0f alpha:1.0];
 }
 //Color of background view in navigation bar, only for iOS 7 for transparency
 + (UIColor*)colorOfBackgroundNavBarImage {
-    return [UIColor colorWithRed:28/255.0f green:44/255.0f blue:67/255.0f alpha:0.7];
+    return [UIColor colorWithRed:252/255.0f green:115/255.0f blue:0/255.0f alpha:1.0];
 }
 
 //Color of letters in navigation bar
@@ -45,12 +45,13 @@
 
 //Tint color of tool bar
 + (UIColor*)colorOfToolBar{
-    return [UIColor colorWithRed:28/255.0f green:44/255.0f blue:67/255.0f alpha:1.0];
+    return [UIColor redColor];
+    return [UIColor colorWithRed:252/255.0f green:115/255.0f blue:0/255.0f alpha:1.0];
 }
 
 //Color of background view in toolBar bar, only for iOS 7 for transparency
 + (UIColor*)colorOfBackgroundToolBarImage {
-    return [UIColor colorWithRed:28/255.0f green:44/255.0f blue:67/255.0f alpha:0.7];
+    return [UIColor colorWithRed:252/255.0f green:115/255.0f blue:0/255.0f alpha:1.0];
 }
 
 //Tint color of tool bar buttons
@@ -64,7 +65,7 @@
 
 //Tint color of tab bar
 + (UIColor*)colorOfTintUITabBar {
-    return [UIColor colorWithRed:28/255.0f green:44/255.0f blue:67/255.0f alpha:1.0];
+    return [UIColor colorWithRed:252/255.0f green:115/255.0f blue:0/255.0f alpha:1.0];
 }
 
 //Tint color for selected tab bar item
@@ -74,7 +75,7 @@
 
 //Tint color for non selected tab bar item (only works with the labels)
 + (UIColor*)colorOfTintNonSelectedUITabBar {
-   return [UIColor colorWithRed:0/255.0f green:0/255.0f blue:0/255.0f alpha:1.0];
+   return [UIColor colorWithRed:65/255.0f green:85/255.0f blue:96/255.0f alpha:1.0];
 }
 
 
@@ -100,7 +101,7 @@
 
 //Background color of login view
 + (UIColor*)colorOfLoginBackground{
-    return [UIColor colorWithRed:245/255.0f green:245/255.0f blue:241/255.0f alpha:1.0];
+    return [UIColor colorWithRed:0/255.0f green:0/255.0f blue:0/255.0f alpha:1.0];
 }
 
 //Text color of url in login view
@@ -126,12 +127,12 @@
 
 //Background color of top of login view, in logo image view
 + (UIColor*)colorOfLoginTopBackground {
-    return [UIColor colorWithRed:255/255.0f green:255/255.0f blue:255/255.0f alpha:1];
+    return [UIColor colorWithRed:0/255.0f green:0/255.0f blue:0/255.0f alpha:1];
 }
 
 //Background color of login button
 +(UIColor *)colorOfLoginButtonBackground{
-    return [UIColor colorWithRed:96/255.0f green:133/255.0f blue:154/255.0f alpha:1.0];
+    return [UIColor colorWithRed:252/255.0f green:115/255.0f blue:0/255.0f alpha:1.0];
 }
 
 //Text color of the text of the login button

@@ -3476,7 +3476,7 @@
 				LastUpgradeCheck = 0610;
 				TargetAttributes = {
 					1324297715ADBB3700DF823E = {
-						DevelopmentTeam = 9B5WD74GWJ;
+						DevelopmentTeam = L72WJVPS3S;
 						SystemCapabilities = {
 							com.apple.ApplicationGroups.iOS = {
 								enabled = 1;
@@ -3488,7 +3488,7 @@
 					};
 					EA6606941AA767F700BA2C65 = {
 						CreatedOnToolsVersion = 6.1.1;
-						DevelopmentTeam = 9B5WD74GWJ;
+						DevelopmentTeam = L72WJVPS3S;
 						SystemCapabilities = {
 							com.apple.ApplicationGroups.iOS = {
 								enabled = 1;
@@ -3500,7 +3500,7 @@
 					};
 					EAB0AB3119ED356A00764C31 = {
 						CreatedOnToolsVersion = 6.0.1;
-						DevelopmentTeam = 9B5WD74GWJ;
+						DevelopmentTeam = L72WJVPS3S;
 						SystemCapabilities = {
 							com.apple.ApplicationGroups.iOS = {
 								enabled = 1;
@@ -3512,7 +3512,7 @@
 					};
 					EAB0AB3F19ED356A00764C31 = {
 						CreatedOnToolsVersion = 6.0.1;
-						DevelopmentTeam = 9B5WD74GWJ;
+						DevelopmentTeam = L72WJVPS3S;
 						SystemCapabilities = {
 							com.apple.ApplicationGroups.iOS = {
 								enabled = 1;
@@ -4567,7 +4567,7 @@
 				CLANG_WARN_INT_CONVERSION = YES;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_IDENTITY = "iPhone Developer: Christian Schoell (S4L2TBE425)";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
 				COPY_PHASE_STRIP = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -4588,7 +4588,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 7.0;
 				ONLY_ACTIVE_ARCH = YES;
-				PROVISIONING_PROFILE = "";
+				PROVISIONING_PROFILE = "0264aa9b-7f70-443b-a9fc-34879b3a4f0c";
 				"PROVISIONING_PROFILE[sdk=iphoneos*]" = "";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -4607,7 +4607,7 @@
 				CLANG_WARN_INT_CONVERSION = YES;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_IDENTITY = "iPhone Distribution: ecqui GmbH (L72WJVPS3S)";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
 				COPY_PHASE_STRIP = YES;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -4637,6 +4637,7 @@
 				CLANG_ENABLE_OBJC_ARC = YES;
 				CODE_SIGN_ENTITLEMENTS = "Owncloud iOs Client/Owncloud iOs Client.entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				"CODE_SIGN_IDENTITY[sdk=*]" = "iPhone Developer";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
 				CODE_SIGN_RESOURCE_RULES_PATH = "";
 				DEFINES_MODULE = YES;
@@ -4659,7 +4660,7 @@
 					"$(SRCROOT)/OCCommunicationLib/OCCommunicationLib/OCCommunicationLib/**",
 				);
 				INFOPLIST_FILE = "Owncloud iOs Client/Owncloud iOs Client-Info.plist";
-				IPHONEOS_DEPLOYMENT_TARGET = 7.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 8.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
@@ -4703,7 +4704,7 @@
 					"$(SRCROOT)/OCCommunicationLib/OCCommunicationLib/OCCommunicationLib/**",
 				);
 				INFOPLIST_FILE = "Owncloud iOs Client/Owncloud iOs Client-Info.plist";
-				IPHONEOS_DEPLOYMENT_TARGET = 7.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 8.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
@@ -4786,6 +4787,7 @@
 				);
 				MTL_ENABLE_DEBUG_INFO = YES;
 				OTHER_SWIFT_FLAGS = "-D DEBUG";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.ecqui.owncloud.ios.OC-Share-Sheet";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
 				SKIP_INSTALL = YES;
@@ -4828,6 +4830,7 @@
 				);
 				MTL_ENABLE_DEBUG_INFO = NO;
 				OTHER_SWIFT_FLAGS = "";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.ecqui.owncloud.ios.OC-Share-Sheet";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
 				SKIP_INSTALL = YES;
@@ -4997,6 +5000,7 @@
 				);
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ecqui.owncloud.ios.ownCloudExtAppFileProvi;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
 				SKIP_INSTALL = YES;
@@ -5046,6 +5050,7 @@
 					"$(PROJECT_DIR)",
 				);
 				MTL_ENABLE_DEBUG_INFO = NO;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ecqui.owncloud.ios.ownCloudExtAppFileProvi;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
 				SKIP_INSTALL = YES;
