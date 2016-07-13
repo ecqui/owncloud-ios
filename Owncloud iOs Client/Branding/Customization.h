@@ -26,7 +26,7 @@
 #define k_hide_url_server YES
 
 //Set a default url server. It must be obligaroy if we hide the url server (#define k_hide_url_server YES)
-#define k_default_url_server @"https://sbox-svd-bau.svdgmbh.at/"
+#define k_default_url_server @"https://projektservice.svdgmbh.at"
 
 //Show multiaccount or disconnect
 #define k_multiaccount_available NO

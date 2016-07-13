@@ -21,7 +21,9 @@
 	<key>CFBundleSignature</key>
 	<string>????</string>
 	<key>CFBundleVersion</key>
-	<string>1.4</string>
+	<string>1.5</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSExtension</key>
 	<dict>
 		<key>NSExtensionFileProviderDocumentGroup</key>
@@ -31,7 +33,5 @@
 		<key>NSExtensionPrincipalClass</key>
 		<string>FileProvider</string>
 	</dict>
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
 </dict>
 </plist>

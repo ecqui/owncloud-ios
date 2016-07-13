@@ -1789,7 +1789,6 @@
 		F7012A3F1CCBF08C00EFCD0C /* Media.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Media.xcassets; sourceTree = "<group>"; };
 		F7012A431CCBF5A700EFCD0C /* SplashImage copy.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "SplashImage copy.png"; sourceTree = "<group>"; };
 		F7012A451CCC06F100EFCD0C /* Default-568h.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "Default-568h.png"; sourceTree = "<group>"; };
-		F7A0FCEB1CBC136D00368E45 /* Customization-changed.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "Customization-changed.h"; path = "Branding/Customization-changed.h"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -2678,7 +2677,6 @@
 			isa = PBXGroup;
 			children = (
 				148DD5B21778436A00FB9977 /* Customization.h */,
-				F7A0FCEB1CBC136D00368E45 /* Customization-changed.h */,
 				148DD5B31778436A00FB9977 /* UIColor+Constants.h */,
 				148DD5B41778436A00FB9977 /* UIColor+Constants.m */,
 			);
