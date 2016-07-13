@@ -42,6 +42,8 @@
 #import "SyncFolderManager.h"
 #import "DownloadUtils.h"
 #import "ManageCapabilitiesDB.h"
+#import "EditFileViewController.h"
+#import "UtilsBrandedOptions.h"
 
 
 //Constant for iOS7
@@ -119,7 +121,7 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
     _currentLocalFolder = [_currentLocalFolder stringByReplacingPercentEscapesUsingEncoding:NSUTF8StringEncoding];
 
     //Check if share link button should be appear.
-    if ((k_hide_share_options) || (APP_DELEGATE.activeUser.hasCapabilitiesSupport && APP_DELEGATE.activeUser.capabilitiesDto && !APP_DELEGATE.activeUser.capabilitiesDto.isFilesSharingAPIEnabled)) {
+    if ((k_hide_share_options) || (APP_DELEGATE.activeUser.hasCapabilitiesSupport == serverFunctionalitySupported && APP_DELEGATE.activeUser.capabilitiesDto && !APP_DELEGATE.activeUser.capabilitiesDto.isFilesSharingAPIEnabled)) {
         NSMutableArray *customItems = [NSMutableArray arrayWithArray:self.toolBar.items];
         [customItems removeObjectIdenticalTo:_shareButtonBar];
         [customItems removeObjectIdenticalTo:_flexibleSpaceAfterShareButtonBar];
@@ -139,7 +141,7 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
     [super viewWillDisappear:animated];
     
     AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication] delegate];
-    if (app.isSharedToOwncloudPresent == NO) {
+    if (app.isSharedToOwncloudPresent == NO && _notification.notificationIsShowing) {
         //Stop the notification
         [self stopNotificationUpdatingFile];
         
@@ -163,12 +165,48 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
     
     _isCancelDownloadClicked = NO;
     
+    [self setEditBarButtonInTextFiles];
+    
     //Set the navigation bar to not translucent
     [self.navigationController.navigationBar setTranslucent:YES];
     
     //Configure view depend device orientation
     [self configureView];
 }
+
+
+#pragma mark - Edit file option
+
+- (void) setEditBarButtonInTextFiles {
+    
+    if ([FileNameUtils isEditTextViewSupportedThisFile:self.file.fileName]) {
+
+        UIBarButtonItem *editButton = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemEdit target:self action:@selector(didSelectEditView)];
+        self.navigationItem.rightBarButtonItem = editButton;
+    }
+}
+
+
+- (void) didSelectEditView {
+    
+    if (self.file.isDownload == downloaded && !self.isDownloading) {
+        EditFileViewController *viewController = [[EditFileViewController alloc] initWithFileDto:self.file andModeEditing:YES];
+        OCNavigationController *navController = [[OCNavigationController alloc] initWithRootViewController:viewController];
+        navController.navigationBar.translucent = NO;
+        
+        if (IS_IPHONE) {
+            viewController.hidesBottomBarWhenPushed = YES;
+            [self presentViewController:navController animated:YES completion:nil];
+        } else {
+            navController.modalPresentationStyle = UIModalPresentationFormSheet;
+            [self presentViewController:navController animated:YES completion:nil];
+        }
+    } else {
+        [self showAlertView:NSLocalizedString(@"no_file_downloaded", nil)];
+    }
+
+}
+
 
 ///-----------------------------------
 /// @name Set Type of Extend With Option
@@ -201,23 +239,8 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
  * Method that put a title label in navBar.
  */
 - (void)putTitleInNavBarByName:(NSString *) name {
-    DLog(@"Put the title of the file in the navigation bar");
-    //Custom title
-    UILabel *label = [[UILabel alloc]initWithFrame: CGRectMake(0, 0, 270, 44)];
-    UIFont *titleFont = [UIFont fontWithName:@"HelveticaNeue" size:17];
     
-    [label setBackgroundColor:[UIColor clearColor]];
-    [label setTextColor:[UIColor whiteColor]];
-
-    [label setFont:titleFont];
-
-    [label setLineBreakMode:NSLineBreakByTruncatingMiddle];
-    [label setTextAlignment:NSTextAlignmentCenter];
-    [label setClipsToBounds:YES];
-    
-    label.text = [name stringByReplacingPercentEscapesUsingEncoding:NSUTF8StringEncoding];
-    
-    self.navigationItem.titleView = label;
+    self.navigationItem.titleView = [UtilsBrandedOptions getCustomLabelForNavBarByName:name];
 }
 
 ///-----------------------------------
@@ -230,10 +253,10 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
 - (void) putTheFavoriteStatus {
     if (_file.isFavorite || [DownloadUtils isSonOfFavoriteFolder:self.file]) {
         //Change the image to unstarred
-        _favoriteButtonBar.image = [UIImage imageNamed:@"favoriteTB-filled"];
+        _favoriteButtonBar.image = [UIImage imageNamed:@"available_offline_TB-filled"];
     } else {
         //Change the image to starred
-        _favoriteButtonBar.image = [UIImage imageNamed:@"favoriteTB"];
+        _favoriteButtonBar.image = [UIImage imageNamed:@"available_offline_TB"];
     }
 }
 
@@ -257,15 +280,21 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
     _updatingFileProgressView.progress = 0.0;
     _updatingCancelButton = [UIButton buttonWithType:UIButtonTypeCustom];
     [_updatingCancelButton setFrame:CGRectMake(220, 12, 20, 20)];
-    [_updatingCancelButton setImage:[UIImage imageNamed:@"cancel_download_white.png"] forState:UIControlStateNormal];
     [_updatingCancelButton addTarget:self action:@selector(didPressUpdatingCancelButton:) forControlEvents:UIControlEventTouchUpInside];
+    
+    if(k_is_text_status_bar_white){
+        [_updatingCancelButton setImage:[UIImage imageNamed:@"cancel_download_white.png"] forState:UIControlStateNormal];
+    }
+    else{
+          [_updatingCancelButton setImage:[UIImage imageNamed:@"cancel_download.png"] forState:UIControlStateNormal];
+    }
     
     [_updatingFileView addSubview:_updatingFileProgressView];
     [_updatingFileView addSubview:_updatingCancelButton];
     
     [self.navigationItem setTitleView:_updatingFileView];
     
-    [self performSelector:@selector(showTextInStatusBar) withObject:nil afterDelay:0.8];
+    [self performSelector:@selector(showTextInStatusBar) withObject:nil afterDelay:0.0];
 }
 
 
@@ -278,13 +307,21 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
  * This method shows a text in the status bar of the device
  */
 - (void) showTextInStatusBar {
-    if (_isDownloading && nameFileToUpdate == _file.fileName) {
+
+    if ([self isDownloadingImageOrFile] && nameFileToUpdate == _file.fileName) {
         DLog(@"Show a notification text in the status bar");
         //Notificacion style
-        _notification.notificationLabelBackgroundColor = [UIColor whiteColor];
-        _notification.notificationLabelTextColor = [UIColor colorOfNavigationBar];
+        _notification.notificationLabelBackgroundColor = [[UIColor colorOfNavigationBar] colorWithAlphaComponent:1.0f];
         _notification.notificationAnimationInStyle = CWNotificationAnimationStyleTop;
         _notification.notificationAnimationOutStyle = CWNotificationAnimationStyleTop;
+        
+        if(k_is_text_status_bar_white) {
+            _notification.notificationLabelTextColor = [UIColor whiteColor];
+        }
+        else {
+            _notification.notificationLabelTextColor = [UIColor blackColor];
+        }
+        
         //File name
         NSString *notificationText = [NSString stringWithFormat:@"%@ %@", NSLocalizedString(@"updating", nil), [nameFileToUpdate stringByReplacingPercentEscapesUsingEncoding:NSUTF8StringEncoding]];
         DLog(@"name: %@",notificationText);
@@ -293,6 +330,13 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
 }
 
 
+- (BOOL) isDownloadingImageOrFile {
+
+    if ((self.galleryView != nil && [self.galleryView isCurrentImageDownloading]) || (self.galleryView == nil && self.isDownloading)) {
+        return YES;
+    }
+    return NO;
+}
 
 ///-----------------------------------
 /// @name Stop notification in status bar
@@ -327,8 +371,8 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
     _progressView.progress = 0.0;
     
     //Enable back button
-    self.navigationController.navigationBar.UserInteractionEnabled = YES;
-    _toolBar.UserInteractionEnabled = YES;
+    self.navigationController.navigationBar.userInteractionEnabled = YES;
+    _toolBar.userInteractionEnabled = YES;
     
     DLog(@"finish to clean view");
 }
@@ -511,7 +555,7 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
             }
             
             
-            if ((download && [download.operation isExecuting]) || (download && download.downloadTask && download.downloadTask.state == NSURLSessionTaskStateRunning) ) {
+            if (download && download.downloadTask && download.downloadTask.state == NSURLSessionTaskStateRunning) {
                  [self contiueDownloadIfTheFileisDownloading];
             }else{
                  [self restartTheDownload];
@@ -596,8 +640,8 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
 
     
     //Enable back button
-    self.navigationController.navigationBar.UserInteractionEnabled = YES;
-    _toolBar.UserInteractionEnabled = YES;
+    self.navigationController.navigationBar.userInteractionEnabled = YES;
+    _toolBar.userInteractionEnabled = YES;
     
 }
 
@@ -648,8 +692,8 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
         }
         
         //Enable back button
-        self.navigationController.navigationBar.UserInteractionEnabled = YES;
-        _toolBar.UserInteractionEnabled = YES;
+        self.navigationController.navigationBar.userInteractionEnabled = YES;
+        _toolBar.userInteractionEnabled = YES;
 
 }
 
@@ -719,8 +763,8 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
     [self.view bringSubviewToFront:_toolBar];
     
     //Enable user interaction
-    self.navigationController.navigationBar.UserInteractionEnabled = YES;
-    _toolBar.UserInteractionEnabled = YES;
+    self.navigationController.navigationBar.userInteractionEnabled = YES;
+    _toolBar.userInteractionEnabled = YES;
 }
 
 #pragma mark - Gallery View Delegate Methods
@@ -1034,17 +1078,17 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
     _file = [ManageFilesDB getFileDtoByFileName:_file.fileName andFilePath:[UtilsUrls getFilePathOnDBByFilePathOnFileDto:_file.filePath andUser:app.activeUser] andUser:app.activeUser];
     
     if ([DownloadUtils isSonOfFavoriteFolder:self.file]) {
-        [self showErrorMessageIfNotIsShowingWithString:NSLocalizedString(@"parent_folder_is_favorite", nil)];
+        [self showErrorMessageIfNotIsShowingWithString:NSLocalizedString(@"parent_folder_is_available_offline_file_child", nil)];
     } else {
         if (_file.isFavorite) {
             _file.isFavorite = NO;
             //Change the image to unstarred
-            _favoriteButtonBar.image = [UIImage imageNamed:@"favoriteTB"];
+            _favoriteButtonBar.image = [UIImage imageNamed:@"available_offline_TB"];
         } else {
             _file.isFavorite = YES;
             _isCancelDownloadClicked = NO;
             //Change the image to starred
-            _favoriteButtonBar.image = [UIImage imageNamed:@"favoriteTB-filled"];
+            _favoriteButtonBar.image = [UIImage imageNamed:@"available_offline_TB-filled"];
             //Download the file if it's not downloaded and not pending to be download
             [self downloadTheFileIfIsnotDownloadingInOtherProcess];
         }
@@ -1130,8 +1174,8 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
         _progressView.progress = 0.0;
         
         //Enable back button
-        self.navigationController.navigationBar.UserInteractionEnabled = YES;
-        _toolBar.UserInteractionEnabled = YES;
+        self.navigationController.navigationBar.userInteractionEnabled = YES;
+        _toolBar.userInteractionEnabled = YES;
     }
 }
 
@@ -1356,8 +1400,8 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
     _progressLabel.hidden = YES;
     
     //Enable back button
-    self.navigationController.navigationBar.UserInteractionEnabled = YES;
-    _toolBar.UserInteractionEnabled = YES;
+    self.navigationController.navigationBar.userInteractionEnabled = YES;
+    _toolBar.userInteractionEnabled = YES;
 }
 
 
@@ -1367,7 +1411,6 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
 - (void)downloadCompleted:(FileDto*)fileDto{
     DLog(@"Hey, file is in device, go to preview");
 
-    _isDownloading = NO;
     _cancelButton.hidden = YES;
     _updatingCancelButton.userInteractionEnabled = NO;
     
@@ -1401,6 +1444,8 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
         }
         [self performSelector:@selector(hiddenButtonsAfterDownload) withObject:nil afterDelay:0.6];
     }
+    
+    _isDownloading = NO;
 }
 
 
@@ -1413,8 +1458,8 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
     [self cleanView];
     
     //Enable interaction view
-    self.navigationController.navigationBar.UserInteractionEnabled = YES;
-    _toolBar.UserInteractionEnabled = YES;
+    self.navigationController.navigationBar.userInteractionEnabled = YES;
+    _toolBar.userInteractionEnabled = YES;
     
     if(string) {
         [self showErrorMessageIfNotIsShowingWithString:string];
@@ -1522,6 +1567,11 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
     }
 }
 
+- (void) showAlertView:(NSString*)string{
+    UIAlertView *alertView = [[UIAlertView alloc] initWithTitle:string message:@"" delegate:self cancelButtonTitle:NSLocalizedString(@"ok", nil) otherButtonTitles:nil, nil];
+    [alertView show];
+}
+
 #pragma mark - Error login delegate method
 
 - (void) errorLogin {
@@ -1560,9 +1610,10 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
 
 - (void) setNotificationForCommunicationBetweenViews {
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(updatePreviewOverwriteFile:) name:PreviewFileNotification object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(updatePreviewFileWithNewIDFromDB:) name:uploadOverwriteFileNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(updatePreviewFileWithNewIDFromDB:) name:UploadOverwriteFileNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(cleanView) name:iPhoneCleanPreviewNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(showNotConnectionWithServerMessage) name:iPhoneShowNotConnectionWithServerMessageNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(dismissThisView) name:IPhoneDoneEditFileTextMessageNotification object:nil];
 }
 
 
@@ -1615,6 +1666,19 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
         [self handleFile];
     }
     
+}
+
+
+#pragma mark - dismiss notification
+
+-(void) dismissThisView {
+    [self cleanView];
+    NSArray *allViewControllers = [self.navigationController viewControllers];
+    for (UIViewController *aViewController in allViewControllers) {
+        if ([aViewController isKindOfClass:[FilesViewController class]]) {
+            [self.navigationController popToViewController:aViewController animated:NO];
+        }
+    }
 }
 
 @end

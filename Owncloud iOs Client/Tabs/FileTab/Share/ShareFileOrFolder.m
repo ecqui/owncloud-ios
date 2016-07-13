@@ -39,13 +39,17 @@
 
 @implementation ShareFileOrFolder
 
-- (void) showShareActionSheetForFile:(FileDto *)file {
-    
+- (void) initManageErrors {
     //We init the ManageNetworkErrors
     if (!_manageNetworkErrors) {
         _manageNetworkErrors = [ManageNetworkErrors new];
         _manageNetworkErrors.delegate = self;
     }
+}
+
+- (void) showShareActionSheetForFile:(FileDto *)file {
+    
+    [self initManageErrors];
     
     if ((APP_DELEGATE.activeUser.hasShareApiSupport == serverFunctionalitySupported || APP_DELEGATE.activeUser.hasShareApiSupport == serverFunctionalityNotChecked)) {
         _file = file;
@@ -202,6 +206,8 @@
  */
 - (void) clickOnShareLinkFromFileDto:(BOOL)isFileDto {
     
+    [self initManageErrors];
+    
     AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
     
     NSString *filePath = @"";
@@ -333,7 +339,7 @@
                         DLog(@"error.code: %ld", (long)error.code);
                         DLog(@"server error: %ld", (long)response.statusCode);
                         
-                        if (error.code == kOCErrorServerForbidden && sharesOfFile.count == 0 && [self isPasswordEnforcedCapabilityEnabled]) {
+                        if (error.code == kOCErrorServerForbidden && [self isPasswordEnforcedCapabilityEnabled]) {
                             
                             //Share whith password maybe enabled, ask for password and try to do the request again with it
                             [self showAlertEnterPassword];
@@ -379,7 +385,7 @@
         
         if (!isSamlCredentialsError) {
             
-            if (error.code == kOCErrorServerForbidden && sharesOfFile.count == 0 && [self isPasswordEnforcedCapabilityEnabled]) {
+            if (error.code == kOCErrorServerForbidden && [self isPasswordEnforcedCapabilityEnabled]) {
             
                 //Share whith password maybe enabled, ask for password and try to do the request again with it
                 [self showAlertEnterPassword];
@@ -401,15 +407,16 @@
 
 -(BOOL)isPasswordEnforcedCapabilityEnabled {
     
-    BOOL output = NO;
+    BOOL output;
     
-    if (APP_DELEGATE.activeUser.hasCapabilitiesSupport) {
+    if ((APP_DELEGATE.activeUser.hasCapabilitiesSupport != serverFunctionalitySupported) ||
+        (APP_DELEGATE.activeUser.hasCapabilitiesSupport == serverFunctionalitySupported && APP_DELEGATE.activeUser.capabilitiesDto && APP_DELEGATE.activeUser.capabilitiesDto.isFilesSharingPasswordEnforcedEnabled) ) {
         
-        CapabilitiesDto *cap = APP_DELEGATE.activeUser.capabilitiesDto;
+        output = YES;
         
-        if (cap.isFilesSharingPasswordEnforcedEnabled) {
-            output = YES;
-        }
+    } else {
+        
+        output = NO;
     }
     
     return output;
@@ -422,6 +429,8 @@
 ///-----------------------------------------------
 
 -(void)doRequestSharedLinkWithPath: (NSString *)path andPassword: (NSString *)password{
+    
+    [self initManageErrors];
     
     AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
     
@@ -525,8 +534,10 @@
  *
  * @param OCSharedDto -> The shared file/folder
  */
-- (void) updateShareLink:(OCSharedDto *)ocShare withPassword:(NSString*)password andExpirationTime:(NSString*)expirationTime{
+- (void) updateShareLink:(OCSharedDto *)ocShare withPassword:(NSString*)password expirationTime:(NSString*)expirationTime permissions:(NSInteger)permissions{
     
+    [self initManageErrors];
+
     AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
     
     [self initLoading];
@@ -550,7 +561,7 @@
 
     password = [self getPasswordEncodingWithPassword:password];
     
-    [[AppDelegate sharedOCCommunication] updateShare:ocShare.idRemoteShared ofServerPath:app.activeUser.url withPasswordProtect:password andExpirationTime:expirationTime andPermissions:k_read_share_permission onCommunication:[AppDelegate sharedOCCommunication] successRequest:^(NSHTTPURLResponse *response, NSString *redirectedServer) {
+    [[AppDelegate sharedOCCommunication] updateShare:ocShare.idRemoteShared ofServerPath:app.activeUser.url withPasswordProtect:password andExpirationTime:expirationTime andPermissions:permissions onCommunication:[AppDelegate sharedOCCommunication] successRequest:^(NSHTTPURLResponse *response, NSString *redirectedServer) {
         
         BOOL isSamlCredentialsError=NO;
         
@@ -608,6 +619,8 @@
 }
 
 - (void) updateLocalShareLink:(OCSharedDto *)ocShare{
+    
+    [self initManageErrors];
     
     AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
     
@@ -698,6 +711,8 @@
  */
 - (void) unshareTheFile: (OCSharedDto *)sharedByLink {
     
+    [self initManageErrors];
+
     AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
     
     [self initLoading];
@@ -780,6 +795,8 @@
 }
 
 - (void) checkSharedStatusOfFile:(FileDto *) file {
+    
+    [self initManageErrors];
     
     AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
     

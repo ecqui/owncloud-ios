@@ -277,7 +277,7 @@
     
     BOOL supportFederatedSharing = NO;
     
-    if (APP_DELEGATE.activeUser.hasCapabilitiesSupport) {
+    if (APP_DELEGATE.activeUser.hasCapabilitiesSupport == serverFunctionalitySupported) {
         CapabilitiesDto *cap = APP_DELEGATE.activeUser.capabilitiesDto;
         
         if (cap.isFilesSharingAllowUserSendSharesToOtherServersEnabled) {
@@ -353,11 +353,11 @@
     NSInteger permissions = k_read_share_permission;
     
     //File is shared to me by others or not
-    if (userOrGroup.shareeType == shareTypeRemote) {
+    if (userOrGroup.shareeType == shareTypeRemote && !APP_DELEGATE.activeUser.hasFedSharesOptionShareSupport) {
         if (self.shareFileDto.isDirectory) {
-            permissions = k_defaul_folder_remote_share_permission;
+            permissions = k_default_folder_remote_share_permission_no_support_share_option;
         } else {
-            permissions = k_defaul_file_remote_share_permission;
+            permissions = k_default_file_remote_share_permission_no_support_share_option;
         }
         
     } else if (([self.shareFileDto.permissions rangeOfString:k_permission_shared].location != NSNotFound)) {
@@ -385,6 +385,11 @@
         self.selectedItems = [ShareUtils manageTheDuplicatedUsers:self.selectedItems];
         
         [self.searchTableView reloadData];
+        
+        if (!IS_IPHONE) {
+        //Refresh the files view that is shown below 
+        [[NSNotificationCenter defaultCenter] postNotificationName: RefreshSharesItemsAfterCheckServerVersion object: nil];
+        }
 
         
     } failureRequest:^(NSHTTPURLResponse *response, NSError *error, NSString *redirectedServer) {

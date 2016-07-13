@@ -18,6 +18,7 @@
 
 
 
+
 @implementation FileNameUtils
 
 
@@ -114,11 +115,23 @@
 }
 
 
-+ (BOOL)isOfficeSupportedThisFile:(NSString*)fileName{
++ (BOOL)isOfficeSupportedThisFile:(NSString*)fileName {
     
     NSString *ext=[self getExtension:fileName];
     
     if([ext isEqualToString:@"TXT"] || [ext isEqualToString:@"PDF"] || [ext isEqualToString:@"DOC"] || [ext isEqualToString:@"XLS"] || [ext isEqualToString:@"PPT"] || [ext isEqualToString:@"RTF"] || [ext isEqualToString:@"DOCX"] || [ext isEqualToString:@"PPTX"] || [ext isEqualToString:@"XLSX"] || [ext isEqualToString:@"XML"] || [ext isEqualToString:@"HTM"] || [ext isEqualToString:@"HTML"] || [ext isEqualToString:@"KEY.ZIP"] || [ext isEqualToString:@"NUMBERS.ZIP"] || [ext isEqualToString:@"PAGES.ZIP"] || [ext isEqualToString:@"PAGES"] || [ext isEqualToString:@"NUMBERS"] || [ext isEqualToString:@"KEY"] || [ext isEqualToString:@"CSS"]  || [ext isEqualToString:@"PY"]  || [ext isEqualToString:@"JS"])
+    {
+        return YES;
+    }
+    
+    return NO;
+}
+
++ (BOOL)isEditTextViewSupportedThisFile:(NSString*)fileName {
+    
+    NSString *ext=[self getExtension:fileName];
+    
+    if ([ext isEqualToString:@"TXT"] || [ext isEqualToString:@"RTF"] || [ext isEqualToString:@"CSS"] || [ext isEqualToString:@"PY"] || [ext isEqualToString:@"XML"] || [ext isEqualToString:@"JS"] )
     {
         return YES;
     }
@@ -390,8 +403,8 @@
     [textFieldToMark setSelectedTextRange:selectionRange];
 }
 
-#pragma mark - Filename Utils
 
+#pragma mark - Filename Utils
 
 + (NSString *)getComposeNameFromAsset:(ALAsset *)asset{
     
@@ -425,7 +438,6 @@
     }
     
     return output;
-    
 }
 
 
@@ -436,7 +448,6 @@
     NSString *appleID = nil;
     
     NSDictionary *fileAttributes = [[NSFileManager defaultManager] attributesOfItemAtPath:path error:nil];
-    
     
     NSDate *date = fileAttributes.fileCreationDate;
     NSDateFormatter* df = [[NSDateFormatter alloc] init];
@@ -462,7 +473,36 @@
     }
     
     return output;
+}
+
+
++ (NSString *)getComposeNameFromPHAsset:(PHAsset *)asset {
+   
+    NSString *output = @"";
+    NSString *appleID = @"";
+    NSDateFormatter *dateFormatter =[[NSDateFormatter alloc] init];
+    [dateFormatter setDateFormat:@"yyyy-MM-dd-HH-mm-ss"];
+    dateFormatter.locale = [[NSLocale alloc] initWithLocaleIdentifier:@"en_US_POSIX"];
+
+    NSString *dateString = [dateFormatter stringFromDate:asset.creationDate];
+    NSString *fileName = [asset valueForKey:@"filename"];
+    NSString *fileExtension = [fileName pathExtension];
     
+    NSMutableArray *arr =[[NSMutableArray alloc] initWithArray: [[fileName lastPathComponent] componentsSeparatedByCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"."]]];
+    [arr removeLastObject];
+    fileName = [arr firstObject];
+    arr =[[NSMutableArray alloc] initWithArray: [fileName componentsSeparatedByCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"_"]]];
+    appleID = [arr lastObject];
+    
+    if (asset.mediaType == PHAssetMediaTypeImage) {
+        output = [NSString stringWithFormat:@"Photo-%@_%@.%@", dateString, appleID, fileExtension];
+    } else if (asset.mediaType == PHAssetMediaTypeVideo) {
+        output = [NSString stringWithFormat:@"Video-%@.%@", dateString, fileExtension];
+    } else {
+        output = [NSString stringWithFormat:@"File-%@.%@", dateString, fileExtension];
+    }
+    
+    return output;
 }
 
 

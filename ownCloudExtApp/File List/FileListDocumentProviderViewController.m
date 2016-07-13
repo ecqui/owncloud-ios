@@ -177,10 +177,13 @@ NSString *userHasCloseDocumentPicker = @"userHasCloseDocumentPicker";
 
 - (void)downloadCompleted:(FileDto*)fileDto{
     
-    self.selectedFile = nil;
     [self setLockedApperance:NO];
     
-    [self.delegate openFile:fileDto];
+    if (fileDto) {
+        [self.delegate openFile:fileDto];
+    }
+    
+    self.selectedFile = nil;
 }
 
 - (void)downloadFailed:(NSString*)string andFile:(FileDto*)fileDto{
@@ -302,7 +305,6 @@ NSString *userHasCloseDocumentPicker = @"userHasCloseDocumentPicker";
         }
         
         
-        //Add a FileDownloadedIcon.png in the left of cell when the file is in device
         if (![file isDirectory]) {
             //Is file
             //Font for file
@@ -341,7 +343,7 @@ NSString *userHasCloseDocumentPicker = @"userHasCloseDocumentPicker";
             }
             
             //Thumbnail
-            fileCell.thumbnailOperation = [InfoFileUtils updateThumbnail:file andUser:self.user tableView:tableView cellForRowAtIndexPath:indexPath];
+            fileCell.thumbnailSessionTask = [InfoFileUtils updateThumbnail:file andUser:self.user tableView:tableView cellForRowAtIndexPath:indexPath];
             
         } else {
             //Is directory
