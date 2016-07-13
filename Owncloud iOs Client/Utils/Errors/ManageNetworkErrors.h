@@ -26,16 +26,16 @@
 
 @interface ManageNetworkErrors : NSObject
 
-@property(nonatomic,weak) __weak id<ManageNetworkErrorsDelegate> delegate;
+@property(nonatomic,strong) id<ManageNetworkErrorsDelegate> delegate;
 
 /*
  * Method called when receive an error from server
  * @errorHttp -> WebDav Server Error of NSURLResponse
- * @errorConnection -> NSError of NSURLConnection
+ * @errorConnection -> NSError of NSURLSession
  * @user -> UserDto
  */
 
-- (void)manageErrorHttp: (NSInteger)errorHttp andErrorConnection:(NSError *)errorConnection andUser:(UserDto *) user;
+- (void)manageErrorHttp:(NSInteger)errorHttp andErrorConnection:(NSError *)errorConnection andUser:(UserDto *)user;
 
 
 @end

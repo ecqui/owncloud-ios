@@ -48,7 +48,23 @@ typedef enum {
 @property (nonatomic, copy) NSString *permissions;
 @property NSInteger taskIdentifier;
 @property (nonatomic) NSInteger providingFileId;
+@property (nonatomic, copy) NSString *ocId;
 
+///-----------------------------------
+/// @name Init with OCFileDto
+///-----------------------------------
+
+/**
+ * This method catch the data of OCFileDto in order to create
+ * a FileDto object
+ *
+ * @param ocFileDto -> OCFileDto
+ *
+ *
+ * @return FileDto
+ *
+ */
 - (id)initWithOCFileDto:(OCFileDto*)ocFileDto;
+
 
 @end

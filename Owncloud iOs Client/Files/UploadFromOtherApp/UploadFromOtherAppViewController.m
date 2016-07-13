@@ -39,6 +39,7 @@
 #import "OCNavigationController.h"
 #import "UtilsUrls.h"
 #import "ManageUsersDB.h"
+#import "ManageThumbnails.h"
 
 #define kOFFSET_FOR_KEYBOARD_iPhone5 160.0
 #define kOFFSET_FOR_KEYBOARD_iPhone 200.0
@@ -894,7 +895,7 @@
         OCNavigationController *navController = [[OCNavigationController alloc] initWithRootViewController:viewController];
         navController.modalPresentationStyle = UIModalPresentationFormSheet;
         
-        if (IS_IOS8) {
+        if (IS_IOS8 || IS_IOS9) {
             [self presentViewController:navController animated:YES completion:nil];
         }else{
             [app.splitViewController presentViewController:navController animated:YES completion:nil];
@@ -961,9 +962,10 @@
     //Get the name in the correct encoding
     NSString *name=[_nameFileTextField.text encodeString:NSUTF8StringEncoding];
     
-    //The _remoteFolder: https://s3.owncloud.com/owncloud/remote.php/webdav/A/
+    //The _remoteFolder: https://domain/(subfoldersServer)/k_url_webdav_server/(subfoldersDB)/
     //The nameFileTextField: FileType.pdf
-    //The folder Name: A/
+    //The folder Name: (subfoldersDB)/
+    
     NSString *folderName = [UtilsUrls getFilePathOnDBByFullPath:_remoteFolder andUser:app.activeUser];
     
     //Obtain the file that the user wants overwrite
@@ -985,6 +987,7 @@
         //Set this file as an overwritten state
         [ManageFilesDB setFileIsDownloadState:file.idFile andState:overwriting];
         [UploadUtils updateOverwritenFile:file FromPath:_filePath];
+        [[ManageThumbnails sharedManager] removeStoredThumbnailForFile:file];
     }
     
     [self saveTheFileOnOwncloud:YES];

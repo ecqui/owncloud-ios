@@ -38,6 +38,23 @@
 	</array>
 	<key>CFBundleExecutable</key>
 	<string>${EXECUTABLE_NAME}</string>
+<<<<<<< HEAD
+=======
+	<key>CFBundleIconFiles</key>
+	<array>
+		<string>MainAppIcon_40-40.png</string>
+		<string>MainAppIcon_40-40@2x.png</string>
+		<string>MainAppIcon_40-40@3x.png</string>
+		<string>MainAppIcon_29-29.png</string>
+		<string>MainAppIcon_29-29@2x.png</string>
+		<string>MainAppIcon_29-29@3x.png</string>
+		<string>MainAppIcon_60-60@2x.png</string>
+		<string>MainAppIcon_60-60@3x.png</string>
+		<string>MainAppIcon_76-76.png</string>
+		<string>MainAppIcon_76-76@2x.png</string>
+		<string>MainAppIcon_167-167.png</string>
+	</array>
+>>>>>>> release3.5.0
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
@@ -47,7 +64,7 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>3.4.5</string>
+	<string>3.4.9</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
 	<key>CFBundleURLTypes</key>
@@ -64,11 +81,19 @@
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
+<<<<<<< HEAD
 	<string>1.3</string>
+=======
+	<string>1.0</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+>>>>>>> release3.5.0
 	<key>LSApplicationCategoryType</key>
 	<string></string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>LastGitCommit</key>
+	<string></string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
@@ -87,6 +112,11 @@
 	</array>
 	<key>UIInterfaceOrientation</key>
 	<string>UIInterfaceOrientationPortrait</string>
+<<<<<<< HEAD
+=======
+	<key>UILaunchStoryboardName</key>
+	<string>Launch Screen</string>
+>>>>>>> release3.5.0
 	<key>UIPrerenderedIcon</key>
 	<true/>
 	<key>UIRequiredDeviceCapabilities</key>

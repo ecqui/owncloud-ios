@@ -21,10 +21,6 @@
 #import "Customization.h"
 
 @implementation AccountCell
-@synthesize userName = _userName;
-@synthesize urlServer = _urlServer;
-@synthesize activeButton = _activeButton;
-@synthesize delegate = _delegate;
 
 - (id)initWithStyle:(UITableViewCellStyle)style reuseIdentifier:(NSString *)reuseIdentifier
 {
@@ -47,18 +43,17 @@
     AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
     
     //We check the connection here because we need to accept the certificate on the self signed server before go to the files tab
-    CheckAccessToServer *mCheckAccessToServer = [[CheckAccessToServer alloc] init];
-    [mCheckAccessToServer isConnectionToTheServerByUrl:self.urlServer.text];
+    [[CheckAccessToServer sharedManager] isConnectionToTheServerByUrl:self.urlServer.text];
     
     //We delete the cookies on SAML
     if (k_is_sso_active) {
         app.activeUser.password = @"";
         [ManageUsersDB updatePassword:app.activeUser];
     }
-    [UtilsFramework deleteAllCookies];
     
     [self.delegate activeAccountByPosition:self.activeButton.tag];
 
 }
+
 
 @end

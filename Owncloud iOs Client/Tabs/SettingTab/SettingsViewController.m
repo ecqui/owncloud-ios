@@ -32,21 +32,30 @@
 #import "ImageUtils.h"
 #import "UtilsFramework.h"
 #import "UtilsUrls.h"
-#import "ManageLocation.h"
-#import "ManageAsset.h"
 #import "PrepareFilesToUpload.h"
 #import "UploadUtils.h"
 #import "UtilsCookies.h"
 #import "ManageCookiesStorageDB.h"
 #import "Accessibility.h"
+#import "SyncFolderManager.h"
+#import "ManageThumbnails.h"
+#import "ManageTouchID.h"
+#import "DeleteUtils.h"
+#import "OCLoadingSpinner.h"
+#import "InstantUpload.h"
 
 //Settings table view size separator
 #define k_padding_normal_section 20.0
+#define k_padding_last_section 40.0
 #define k_padding_under_section 5.0
 
 //Settings custom font
 #define k_settings_normal_font [UIFont fontWithName:@"HelveticaNeue" size:17]
 #define k_settings_bold_font [UIFont fontWithName:@"HelveticaNeue-Medium" size:17];
+
+//ActionSheet tags
+#define k_tag_actionSheet_menu_account 101
+#define k_tag_actionSheet_recommend 102
 
 
 ///-----------------------------------
@@ -68,9 +77,13 @@
 }
 
 
--(UIStatusBarStyle)preferredStatusBarStyle
-{
-    return UIStatusBarStyleLightContent;
+-(UIStatusBarStyle)preferredStatusBarStyle {
+    
+    if (k_is_text_status_bar_white) {
+        return UIStatusBarStyleLightContent;
+    } else {
+        return UIStatusBarStyleDefault;
+    }
 }
 
 -(UIViewController *)childViewControllerForStatusBarStyle
@@ -80,7 +93,7 @@
 
 @end
 
-@interface SettingsViewController ()
+@interface SettingsViewController () <InstantUploadDelegate>
 
 @property (nonatomic, strong) NSMutableArray *listUsers;
 
@@ -93,10 +106,6 @@
     self = [super initWithNibName:nibNameOrNil bundle:nibBundleOrNil];
     if (self) {
         _isMailComposeVisible = NO;
-       
-        //Set the instant upload
-        [self performSelector:@selector(initStateInstantUpload) withObject:nil afterDelay:4.0];
-    
     }
     return self;
 }
@@ -110,37 +119,69 @@
     
     [self.view setBackgroundColor:[UIColor groupTableViewBackgroundColor]];
 
+    [InstantUpload instantUploadManager].delegate = self;
 }
 
 - (void)viewDidUnload
 {
     [super viewDidUnload];
-    // Release any retained subviews of the main view.
-    self.edgesForExtendedLayout = UIRectCornerAllCorners;
+    
 }
 
 - (void)viewWillAppear:(BOOL)animated{
     [super viewWillAppear:animated];
+    
+    if (IS_IOS8 || IS_IOS9) {
+        self.edgesForExtendedLayout = UIRectEdgeAll;
+        self.extendedLayoutIncludesOpaqueBars = true;
+        self.automaticallyAdjustsScrollViewInsets = true;
+    }else{
+        self.edgesForExtendedLayout = UIRectCornerAllCorners;
+    }
+    
     AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
     
     //Relaunch the uploads that failed before
     [app performSelector:@selector(relaunchUploadsFailedNoForced) withObject:nil afterDelay:5.0];
-    
-    //Set the passcode swith asking to database
-   [self.switchPasscode setOn:[ManageAppSettingsDB isPasscode] animated:NO];
-    
+
     self.user = app.activeUser;
     
     self.listUsers = [ManageUsersDB getAllUsers];
+    [self.settingsTableView reloadData];
+    
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(updatesWhenEnteringForegroundMode) name:UIApplicationDidBecomeActiveNotification object:nil];
 
 }
 
 - (void) viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
+    [[NSNotificationCenter defaultCenter] removeObserver: self name:UIApplicationDidBecomeActiveNotification object:nil];
 }
 
 -(void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
+    
+}
+
+-(void)viewDidLayoutSubviews
+{
+    
+    if (IS_IOS8 || IS_IOS9) {
+        
+        if ([self.settingsTableView respondsToSelector:@selector(setSeparatorInset:)]) {
+            [self.settingsTableView setSeparatorInset:UIEdgeInsetsMake(0, 10, 0, 0)];
+        }
+        
+        if ([self.settingsTableView respondsToSelector:@selector(setLayoutMargins:)]) {
+            [self.settingsTableView setLayoutMargins:UIEdgeInsetsZero];
+        }
+        
+        
+        CGRect rect = self.navigationController.navigationBar.frame;
+        float y = rect.size.height + rect.origin.y;
+        self.settingsTableView.contentInset = UIEdgeInsetsMake(y,0,0,0);
+        
+    }
     
 }
 
@@ -156,6 +197,10 @@
     } else {
         return YES;
     }
+}
+
+- (void) updatesWhenEnteringForegroundMode {
+    [self.settingsTableView reloadData];
 }
 
 #pragma mark - Setting Actions
@@ -200,13 +245,30 @@
         oc.modalPresentationStyle = UIModalPresentationFormSheet;
         [app.splitViewController presentViewController:oc animated:YES completion:nil];
     }
+    
+    [self.settingsTableView reloadData];
+
+}
+
+/**
+ * This method is called when the touch ID swicth changes
+ *
+ * @param id -> UISwitch sender
+ 
+ * @return IBAction
+ *
+ */
+-(IBAction)changeSwitchTouchID:(UISwitch*)touchIDSwitch {
+    [self setPropertiesTouchIDToState:touchIDSwitch.on];
 }
 
 
 -(void)disconnectUser {
     AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
+
+    [[ManageThumbnails sharedManager] deleteThumbnailCacheFolderOfUserId: APP_DELEGATE.activeUser.idUser];
     
-    [ManageUsersDB removeUserAndDataByIdUser: app.activeUser.idUser];
+    [ManageUsersDB removeUserAndDataByIdUser: APP_DELEGATE.activeUser.idUser];
     
     [UtilsFramework deleteAllCookies];
     
@@ -218,7 +280,7 @@
     
     NSError *error;     
     [[NSFileManager defaultManager] removeItemAtPath:path error:&error];
-    [app.downloadManager cancelDownloads];
+    [self performSelectorInBackground:@selector(cancelAllDownloads) withObject:nil];
     app.uploadArray=[[NSMutableArray alloc]init];
     [app updateRecents];
     [app restartAppAfterDeleteAllAccounts];
@@ -263,14 +325,7 @@
 // Asks the data source to return the number of sections in the table view.
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
     
-    NSInteger sections = 0;
-    
-    if (k_multiaccount_available) {
-        sections = 5;
-     } else {
-        sections = 4;
-     }
-    return sections;
+    return 5;
 }
 
 // Returns the table view managed by the controller object.
@@ -289,50 +344,40 @@
             break;
             
         case 1:
-            n = 1;
+            if (k_multiaccount_available) {
+                n = 1;
+            }else{
+                n = 0;
+            }
             break;
             
         case 2:
-            n = 1;
+            if (self.switchPasscode.on && [self isTouchIDAvailable]) {
+                n = 2;
+            }else{
+                n = 1;
+            }
             break;
             
         case 3:
-            
-            if (k_multiaccount_available) {
-               n = 1;
-            }else{
-                if (k_show_help_option_on_settings) {
-                    n = n + 1;
-                }
-                if (k_show_recommend_option_on_settings) {
-                    n = n + 1;
-                }
-                if (k_show_feedback_option_on_settings) {
-                    n = n + 1;
-                }
-                if (k_show_imprint_option_on_settings) {
-                    n = n + 1;
-                }
+            if ([[InstantUpload instantUploadManager] enabled]) {
+                n = 2;
+            } else {
+                n = 1;
             }
-
             break;
-            
         case 4:
-            n = 0;
-            if (k_multiaccount_available) {
-               
-                if (k_show_help_option_on_settings) {
-                    n = n + 1;
-                }
-                if (k_show_recommend_option_on_settings) {
-                    n = n + 1;
-                }
-                if (k_show_feedback_option_on_settings) {
-                    n = n + 1;
-                }
-                if (k_show_imprint_option_on_settings) {
-                    n = n + 1;
-                }
+            if (k_show_help_option_on_settings) {
+                n = n + 1;
+            }
+            if (k_show_recommend_option_on_settings) {
+                n = n + 1;
+            }
+            if (k_show_feedback_option_on_settings) {
+                n = n + 1;
+            }
+            if (k_show_imprint_option_on_settings) {
+                n = n + 1;
             }
             break;
             
@@ -355,44 +400,24 @@
     
     switch (indexPath.section) {
         case 0:
-            if (k_multiaccount_available) {
-                cell = [self getSectionManageAccountBlock:cell byRow:indexPath.row];
-            }else{
-                cell = [self getSectionDisconnectButton:cell byRow:indexPath.row];
-            }
+            cell = [self getSectionManageAccountBlock:cell byRow:indexPath.row];
             break;
-            
+
         case 1:
             if (k_multiaccount_available) {
-               cell = [self getSectionAddAccountButton:cell byRow:indexPath.row];
-            }else{
-                [self getSectionAppPinBlock:cell byRow:indexPath.row];
+                cell = [self getSectionAddAccountButton:cell byRow:indexPath.row];
             }
             break;
-            
+
         case 2:
-            if (k_multiaccount_available) {
-                [self getSectionAppPinBlock:cell byRow:indexPath.row];
-            }else{
-                [self getSectionAppInstantUpload:cell byRow:indexPath.row];
-            }
+            [self getSectionAppPinBlock:cell byRow:indexPath.row];
             break;
-            
+
         case 3:
-            if (k_multiaccount_available) {
-                [self getSectionAppInstantUpload:cell byRow:indexPath.row];
-            }else{
-                [self getSectionInfoBlock:cell byRow:indexPath.row];
-            }
+            [self getSectionAppInstantUpload:cell byRow:indexPath.row];
             break;
-            
         case 4:
-            if (k_multiaccount_available) {
-                [self getSectionInfoBlock:cell byRow:indexPath.row];
-            }else{
-                //Nothing
-            }
-            
+            [self getSectionInfoBlock:cell byRow:indexPath.row];
             break;
             
         default:
@@ -406,19 +431,18 @@
 
 -(UIView *)tableView:(UITableView *)tableView viewForFooterInSection:(NSInteger)section {
     //Set the text of the footer section
-    UILabel *label = [[UILabel alloc] init];
+    UIView *container = [[UIView alloc] initWithFrame:CGRectMake(0, 0, self.settingsTableView.frame.size.width, k_padding_last_section + self.tabBarController.tabBar.frame.size.height)];
+    container.backgroundColor = [UIColor clearColor];
+    UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, self.settingsTableView.frame.size.width, k_padding_last_section)];
     UIFont *appFont = [UIFont fontWithName:@"HelveticaNeue" size:13];
     
-    NSInteger sectionToShowFooter = 3;
-    
-    if (k_multiaccount_available) {
-        sectionToShowFooter = 4;
-    }
+    NSInteger sectionToShowFooter = 4;
 
     if (section == sectionToShowFooter) {
         NSString *appVersion = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
         NSString *appName = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleDisplayName"];
-        label.text = [NSString stringWithFormat:@"%@ %d    iOS %@", appName, k_year, appVersion];
+        NSString *lastGitCommit = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"LastGitCommit"];
+        label.text = [NSString stringWithFormat:@"%@ %d    iOS %@ (%@)", appName, k_year, appVersion, lastGitCommit];
         label.font = appFont;
         label.textColor = [UIColor grayColor];
         label.backgroundColor = [UIColor clearColor];
@@ -427,7 +451,10 @@
         label.backgroundColor = [UIColor clearColor];
         label.text = @"";
     }
-    return label;
+    
+    [container addSubview:label];
+    
+    return container;
 }
 
 
@@ -444,7 +471,7 @@
             if (k_multiaccount_available) {
                 height = k_padding_under_section;
             }else{
-                height = k_padding_normal_section;
+                height = 0;
             }
             break;
             
@@ -469,6 +496,18 @@
             }
             break;
             
+        case 1:
+            if (k_multiaccount_available) {
+                height = k_padding_normal_section;
+            } else {
+                height = 0;
+            }
+            break;
+            
+        case 4:
+            height = k_padding_last_section + self.tabBarController.tabBar.frame.size.height;
+            break;
+            
         default:
             height = k_padding_normal_section;
             break;
@@ -486,41 +525,16 @@
             title = NSLocalizedString(@"accounts_section", nil);
             break;
             
-        case 1:
-            
-            if (!k_multiaccount_available) {
-                title = NSLocalizedString(@"security_section", nil);
-            }
-            
-            break;
-            
         case 2:
-            
-            if (k_multiaccount_available) {
-                title = NSLocalizedString(@"security_section", nil);
-            }else{
-                title = NSLocalizedString(@"instant_updloads_section", nil);
-            }
-            
+            title = NSLocalizedString(@"security_section", nil);
             break;
-            
         case 3:
-            
-            if (k_multiaccount_available) {
-                title = NSLocalizedString(@"instant_updloads_section", nil);
-            }else{
-                title = NSLocalizedString(@"more_section", nil);
-            }
-            
+            title = NSLocalizedString(@"instant_updloads_section", nil);
             break;
-            
         case 4:
-            if (k_multiaccount_available) {
-                title = NSLocalizedString(@"more_section", nil);
-            }
-    
+            title = NSLocalizedString(@"more_section", nil);
             break;
-            
+
         default:
             break;
     }
@@ -600,6 +614,7 @@
             cell.textLabel.text = NSLocalizedString(@"help", nil);
             [cell setAccessoryType:UITableViewCellAccessoryDisclosureIndicator];
             
+            
             //Add accesibility label for Automation
             cell.accessibilityLabel = ACS_SETTINGS_HELP_CELL;
             break;
@@ -678,7 +693,13 @@
     
     switch (row) {
         case 0:
-            cell.textLabel.text=NSLocalizedString(@"title_app_pin", nil);
+            if([self isTouchIDAvailable] && !self.switchPasscode.on) {
+                cell.textLabel.text = NSLocalizedString(@"title_app_pin_and_touchID", nil);
+            }
+            else{
+                cell.textLabel.text = NSLocalizedString(@"title_app_pin", nil);
+            }
+            
             self.switchPasscode = [[UISwitch alloc] initWithFrame:CGRectZero];
             cell.accessoryView = self.switchPasscode;
             [self.switchPasscode setOn:[ManageAppSettingsDB isPasscode] animated:YES];
@@ -690,6 +711,19 @@
             
             break;
             
+        case 1:
+            cell.textLabel.text = NSLocalizedString(@"title_app_touchID", nil);
+            self.switchTouchID = [[UISwitch alloc] initWithFrame:CGRectZero];
+            cell.accessoryView = self.switchTouchID;
+            [self.switchTouchID setOn:[ManageAppSettingsDB isTouchID] animated:YES];
+            [self.switchTouchID addTarget:self action:@selector(changeSwitchTouchID:) forControlEvents:UIControlEventValueChanged];
+            [cell setSelectionStyle:UITableViewCellSelectionStyleNone];
+            
+            //Add accesibility label for Automation
+            self.switchTouchID.accessibilityLabel = ACS_SETTINGS_TOUCH_ID_SWITCH;
+            
+            break;
+            
         default:
             break;
     }
@@ -698,7 +732,7 @@
 }
 
 -(UITableViewCell *) getSectionAppInstantUpload:(UITableViewCell *) cell byRow:(NSInteger) row {
-   
+    
     cell.textLabel.font = k_settings_normal_font;
     
     switch (row) {
@@ -706,13 +740,24 @@
             cell.textLabel.text = NSLocalizedString(@"title_instant_upload", nil);
             self.switchInstantUpload = [[UISwitch alloc] initWithFrame:CGRectZero];
             cell.accessoryView = self.switchInstantUpload;
-            [self.switchInstantUpload setOn:[ManageAppSettingsDB isInstantUpload] animated:YES];
+            [self.switchInstantUpload setOn:[[InstantUpload instantUploadManager] enabled] animated:YES];
             [self.switchInstantUpload addTarget:self action:@selector(changeSwitchInstantUpload:) forControlEvents:UIControlEventValueChanged];
             [cell setSelectionStyle:UITableViewCellSelectionStyleNone];
             
-            //Add accesibility label for Automation
             self.switchInstantUpload.accessibilityLabel = ACS_SETTINGS_INSTANT_UPLOADS_SWITCH;
             
+            break;
+        case 1:
+            cell.textLabel.text = NSLocalizedString(@"title_background_instant_upload", nil);
+            
+            self.switchBackgroundInstantUpload = [[UISwitch alloc] initWithFrame:CGRectZero];
+            cell.accessoryView = self.switchBackgroundInstantUpload;
+            
+            [self.switchBackgroundInstantUpload setOn:[[InstantUpload instantUploadManager] backgroundInstantUploadEnabled] animated:YES];
+            
+            [self.switchBackgroundInstantUpload addTarget:self action:@selector(changeSwitchBackgroundInstantUpload:) forControlEvents:UIControlEventValueChanged];
+            [cell setSelectionStyle:UITableViewCellSelectionStyleNone];
+            self.switchInstantUpload.accessibilityLabel = ACS_SETTINGS_BACKGROUND_INSTANT_UPLOADS_SWITCH;
             break;
         default:
             break;
@@ -721,11 +766,13 @@
     return cell;
 }
 
+
 - (AccountCell *) getSectionManageAccountBlock:(UITableViewCell *) cell byRow:(NSInteger) row {
     
     static NSString *CellIdentifier = @"AccountCell";
     
     AccountCell *accountCell = (AccountCell *) [self.settingsTableView dequeueReusableCellWithIdentifier:CellIdentifier];
+    UserDto *userAccout = [self.listUsers objectAtIndex:row];
     
     if (accountCell == nil) {
         
@@ -743,15 +790,19 @@
     [accountCell.activeButton setTag:row];
     
     accountCell.selectionStyle = UITableViewCellSelectionStyleNone;
-    accountCell.userName.text = ((UserDto *) [self.listUsers objectAtIndex:row]).username;
+    accountCell.userName.text = userAccout.username;
     
     //If saml needs change the name to utf8
     if (k_is_sso_active) {
         accountCell.userName.text = [accountCell.userName.text stringByReplacingPercentEscapesUsingEncoding:NSUTF8StringEncoding];
     }
     
-    accountCell.urlServer.text = ((UserDto *) [self.listUsers objectAtIndex:row]).url;
-    accountCell.accessoryType = UITableViewCellAccessoryDetailButton;
+    accountCell.urlServer.text = userAccout.url;
+    [cell setSelectionStyle:UITableViewCellSelectionStyleNone];
+    [accountCell.menuButton setTag:row];
+    [accountCell.menuButton setImage:[UIImage imageNamed:@"more-filledBlack.png"] forState:UIControlStateNormal];
+    [accountCell.menuButton addTarget:self action:@selector(showMenuAccountOptions:) forControlEvents:UIControlEventTouchUpInside];
+
     
     if(((UserDto *) [self.listUsers objectAtIndex:row]).activeaccount){
         [accountCell.activeButton setImage:[UIImage imageNamed:@"radio_checked.png"] forState:UIControlStateNormal];
@@ -794,46 +845,6 @@
     return addAccountCell;
 }
 
-- (UITableViewCell *) getSectionDisconnectButton:(UITableViewCell *) cell byRow:(NSInteger) row {
-    
-    
-    static NSString *CellIdentifier = @"DisconnectCell";
-    
-    UITableViewCell *disconnectCell;
-    
-    disconnectCell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:CellIdentifier];
-   
-    disconnectCell.selectionStyle = UITableViewCellSelectionStyleBlue;
-    disconnectCell.textLabel.font = k_settings_bold_font;
-    disconnectCell.textLabel.textAlignment = NSTextAlignmentCenter;
-    disconnectCell.editing = NO;
-    disconnectCell.textLabel.text = NSLocalizedString(@"disconnect_button", nil);
-    disconnectCell.backgroundColor = [UIColor colorOfBackgroundButtonOnList];
-    disconnectCell.textLabel.textColor = [UIColor colorOfTextButtonOnList];
-    
-    return disconnectCell;
-}
-
-#pragma mark - Accesories support for Accounts Section
-
-- (void) pressedInfoAccountButton:(UIButton *)sender{
-    
-    //Edit Account
-    EditAccountViewController *viewController = [[EditAccountViewController alloc]initWithNibName:@"EditAccountViewController_iPhone" bundle:nil andUser:(UserDto *)[self.listUsers objectAtIndex:sender.tag]];
-    
-    if (IS_IPHONE)
-    {
-        viewController.hidesBottomBarWhenPushed = YES;
-        [self.navigationController pushViewController:viewController animated:YES];
-    } else {
-        AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
-        
-        OCNavigationController *navController = [[OCNavigationController alloc] initWithRootViewController:viewController];
-        navController.modalPresentationStyle = UIModalPresentationFormSheet;
-        [app.splitViewController presentViewController:navController animated:YES completion:nil];
-    }
-}
-
 
 #pragma mark - UITableView delegate
 
@@ -846,8 +857,6 @@
         case 0:
             if (k_multiaccount_available) {
                 [self didPressOnAccountIndexPath:indexPath];
-            }else{
-                [self disconnectUser];
             }
             break;
             
@@ -857,16 +866,8 @@
             }
             break;
             
-        case 3:
-            if (!k_multiaccount_available) {
-                [self didPressOnInfoBlock:indexPath.row];
-            }
-            break;
-            
         case 4:
-            if (k_multiaccount_available) {
-                [self didPressOnInfoBlock:indexPath.row];
-            }
+            [self didPressOnInfoBlock:indexPath.row];
             break;
             
         default:
@@ -886,88 +887,12 @@
 
 - (void)tableView:(UITableView *)tableView commitEditingStyle:(UITableViewCellEditingStyle)editingStyle forRowAtIndexPath:(NSIndexPath *)indexPath
 {
-    DLog(@"DELETE!!! %ld", (long)indexPath.row);
     if (editingStyle == UITableViewCellEditingStyleDelete) {
-        
-        AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
-        UserDto *selectedUser = (UserDto *)[self.listUsers objectAtIndex:indexPath.row];
-        
-        //Cancel downloads of the active user
-        if (selectedUser.idUser == app.activeUser.idUser) {
-            [self cancelAllDownloadsOfActiveUser];
-        }
-        
-        //Delete the tables of this user
-        [ManageUsersDB removeUserAndDataByIdUser: selectedUser.idUser];
-        
-        [self performSelectorInBackground:@selector(cancelAndRemoveFromTabRecentsAllInfoByUser:) withObject:selectedUser];
-        
-        //Delete files os user in the system
-        NSString *userFolder = [NSString stringWithFormat:@"/%ld",(long)selectedUser.idUser];
-        NSString *path= [[UtilsUrls getOwnCloudFilePath] stringByAppendingPathComponent:userFolder];
-        
-
-        NSError *error;
-        [[NSFileManager defaultManager] removeItemAtPath:path error:&error];
-        
-        
-        //if previeus account is active we active the first by iduser
-        if(selectedUser.activeaccount) {
-            
-            [ManageUsersDB setActiveAccountAutomatically];
-            
-            //Update in appDelegate the active user
-            app.activeUser = [ManageUsersDB getActiveUser];
-            
-            [self setCookiesOfActiveAccount];
-            
-            //If ipad, clean the detail view
-            if (!IS_IPHONE) {
-                AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
-                [app presentWithView];
-            }
-        }
-        
-        self.listUsers = [ManageUsersDB getAllUsers];
-        
-        if([self.listUsers count] > 0) {
-            [self.settingsTableView performSelectorOnMainThread:@selector(reloadData) withObject:nil waitUntilDone:NO];
-        } else {
-            
-            self.settingsTableView.editing = NO;
-            
-            AppDelegate *appDelegate = (AppDelegate *)[[UIApplication sharedApplication]delegate];
-            
-            [appDelegate.downloadManager cancelDownloads];
-            appDelegate.uploadArray=[[NSMutableArray alloc]init];
-            [appDelegate updateRecents];
-            [appDelegate restartAppAfterDeleteAllAccounts];
-        }
-        
-        
-    } else if (editingStyle == UITableViewCellEditingStyleInsert) {
-        // Create a new instance of the appropriate class, insert it into the array, and add a new row to the table view.
+         UserDto *selectedUser = (UserDto *)[self.listUsers objectAtIndex:indexPath.row];
+        [self dicSelectLogOutAccount:selectedUser];
     }
 }
 
-- (void)tableView:(UITableView *)tableView accessoryButtonTappedForRowWithIndexPath:(NSIndexPath *)indexPath{
-    
-    //Edit Account
-    EditAccountViewController *viewController = [[EditAccountViewController alloc]initWithNibName:@"EditAccountViewController_iPhone" bundle:nil andUser:(UserDto *)[self.listUsers objectAtIndex:indexPath.row]];
-    
-    if (IS_IPHONE)
-    {
-        viewController.hidesBottomBarWhenPushed = YES;
-        [self.navigationController pushViewController:viewController animated:YES];
-    } else {
-        AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
-        
-        OCNavigationController *navController = [[OCNavigationController alloc] initWithRootViewController:viewController];
-        navController.modalPresentationStyle = UIModalPresentationFormSheet;
-        [app.splitViewController presentViewController:navController animated:YES completion:nil];
-    }
-    
-}
 
 #pragma mark - DidSelectRow Sections
 
@@ -1066,18 +991,20 @@
                 if (self.popupQuery) {
                     self.popupQuery = nil;
                 }
-                self.popupQuery = [[UIActionSheet alloc] initWithTitle:nil delegate:self cancelButtonTitle:NSLocalizedString(@"cancel", nil) destructiveButtonTitle:nil otherButtonTitles:@"Facebook", @"Twitter", @"E-Mail", nil];
+                self.popupQuery = [[UIActionSheet alloc] initWithTitle:nil
+                                                              delegate:self
+                                                     cancelButtonTitle:NSLocalizedString(@"cancel", nil)
+                                                destructiveButtonTitle:nil
+                                                     otherButtonTitles:@"Facebook", @"Twitter", @"E-Mail", nil];
+                
+                self.popupQuery.actionSheetStyle = UIActionSheetStyleDefault;
+                self.popupQuery.tag = k_tag_actionSheet_recommend;
                 
                 if (IS_IPHONE) {
                     [self.popupQuery showInView:[self.view window]];
                 }else {
-                    
-                    if (IS_IOS8) {
-                        AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
-                        [self.popupQuery showInView:app.splitViewController.view];
-                    } else {
-                        [self.popupQuery showInView:[self.view window]];
-                    }
+                    AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
+                    [self.popupQuery showInView:app.splitViewController.view];
                 }
             }
         }
@@ -1117,8 +1044,6 @@
 
 - (void) didPressOnAccountIndexPath:(NSIndexPath*)indexPath {
     
-    [self cancelAllDownloadsOfActiveUser];
-    
     AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
     app.userSessionCurrentToken = nil;
     
@@ -1136,51 +1061,83 @@
     
     if (app.activeUser.idUser != selectedUser.idUser) {
         //Cancel downloads of the previous user
-        [self cancelAllDownloadsOfActiveUser];
+    
+        [[OCLoadingSpinner sharedOCLoadingSpinner] initLoadingForViewController: self];
+    
+        [AppDelegate sharedSyncFolderManager].delegate = self;
         
-        app.userSessionCurrentToken = nil;
-        
-        //If ipad, clean the detail view
-        if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad) {
-            [app presentWithView];
-        }
-        
-        [ManageUsersDB setAllUsersNoActive];
-        [ManageUsersDB setActiveAccountByIdUser:selectedUser.idUser];
-        selectedUser.activeaccount = YES;
-        
-        //Restore the cookies of the future activeUser
-        //1- Storage the new cookies on the Database
-        [UtilsCookies setOnDBStorageCookiesByUser:app.activeUser];
-        //2- Clean the cookies storage
-        [UtilsFramework deleteAllCookies];
-        //3- We restore the previous cookies of the active user on the System cookies storage
-        [UtilsCookies setOnSystemStorageCookiesByUser:selectedUser];
-        //4- We delete the cookies of the active user on the databse because it could change and it is not necessary keep them there
-        [ManageCookiesStorageDB deleteCookiesByUser:selectedUser];
-        
-        //Change the active user in appDelegate global variable
-        app.activeUser = selectedUser;
-        
-        //Check if the server is Chunk
-        [self performSelectorInBackground:@selector(checkShareItemsInAppDelegate) withObject:nil];
-        
-        [UtilsCookies eraseURLCache];
-        
-        self.listUsers = [ManageUsersDB getAllUsers];
-        [self.settingsTableView reloadData];
-        
-        //We get the current folder to create the local tree
-        //we create the user folder to haver multiuser
-        NSString *currentLocalFileToCreateFolder = [NSString stringWithFormat:@"%@%ld/",[UtilsUrls getOwnCloudFilePath],(long)selectedUser.idUser];
-        DLog(@"current: %@", currentLocalFileToCreateFolder);
-        
-        if (![[NSFileManager defaultManager] fileExistsAtPath:currentLocalFileToCreateFolder]) {
-            NSError *error = nil;
-            [[NSFileManager defaultManager] createDirectoryAtPath:currentLocalFileToCreateFolder withIntermediateDirectories:NO attributes:nil error:&error];
-            DLog(@"Error: %@", [error localizedDescription]);
-        }
-        app.isNewUser = YES;
+        [self performSelectorInBackground:@selector(cancelAllDownloads) withObject:nil];
+    
+        [self continueChangingUser:selectedUser];
+    }
+}
+
+- (void) continueChangingUser:(UserDto *) selectedUser {
+    
+    AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
+    app.userSessionCurrentToken = nil;
+    
+    self.semaphoreChangeUser = dispatch_semaphore_create(0);
+    
+    // Run loop
+    while (dispatch_semaphore_wait(self.semaphoreChangeUser, DISPATCH_TIME_NOW)) {
+        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
+                                 beforeDate:[NSDate dateWithTimeIntervalSinceNow:k_timeout_upload]];
+    }
+    
+    DLog(@"continueChangingUser");
+    
+    [[OCLoadingSpinner sharedOCLoadingSpinner] endLoading];
+    
+    [UtilsFramework deleteAllCookies];
+    
+    //[self performSelectorInBackground:@selector(cancelAllDownloads) withObject:nil];
+    
+    //If ipad, clean the detail view
+    if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad) {
+        [app presentWithView];
+    }
+    
+    [ManageUsersDB setAllUsersNoActive];
+    [ManageUsersDB setActiveAccountByIdUser:selectedUser.idUser];
+    selectedUser.activeaccount = YES;
+    
+    //Restore the cookies of the future activeUser
+    //1- Storage the new cookies on the Database
+    [UtilsCookies setOnDBStorageCookiesByUser:app.activeUser];
+    //2- Clean the cookies storage
+    [UtilsFramework deleteAllCookies];
+    //3- We restore the previous cookies of the active user on the System cookies storage
+    [UtilsCookies setOnSystemStorageCookiesByUser:selectedUser];
+    //4- We delete the cookies of the active user on the databse because it could change and it is not necessary keep them there
+    [ManageCookiesStorageDB deleteCookiesByUser:selectedUser];
+    
+    //Change the active user in appDelegate global variable
+    app.activeUser = selectedUser;
+    
+    //Check if the server is Chunk
+    [self performSelectorInBackground:@selector(checkShareItemsInAppDelegate) withObject:nil];
+    
+    [UtilsCookies eraseURLCache];
+    
+    self.listUsers = [ManageUsersDB getAllUsers];
+    [self.settingsTableView reloadData];
+    
+    [self createFolderForUser:selectedUser];
+    
+    app.isNewUser = YES;
+}
+
+- (void) createFolderForUser:(UserDto *) user {
+    //We get the current folder to create the local tree
+    //we create the user folder to haver multiuser
+    NSString *currentLocalFileToCreateFolder = [NSString stringWithFormat:@"%@%ld/",[UtilsUrls getOwnCloudFilePath],(long)user.idUser];
+    DLog(@"current: %@", currentLocalFileToCreateFolder);
+    
+    if (![[NSFileManager defaultManager] fileExistsAtPath:currentLocalFileToCreateFolder]) {
+        NSError *error = nil;
+        [[NSFileManager defaultManager] createDirectoryAtPath:currentLocalFileToCreateFolder withIntermediateDirectories:NO attributes:nil error:&error];
+        DLog(@"Error: %@", [error localizedDescription]);
     }
 }
 
@@ -1263,10 +1220,24 @@
 
 #pragma mark - Utils
 
-- (void) cancelAllDownloadsOfActiveUser {
+- (void) cancelAllDownloads {
     //Cancel downloads in ipad
     AppDelegate *appDelegate = (AppDelegate *)[[UIApplication sharedApplication]delegate];
     [appDelegate.downloadManager cancelDownloads];
+    
+    [[AppDelegate sharedSyncFolderManager] cancelAllDownloads];
+}
+
+- (NSMutableArray *) getUsersWithoutActiveUser {
+    NSMutableArray *listOfUsersWithouActive = [NSMutableArray new];
+    
+    for (UserDto *current in self.listUsers) {
+        if (!current.activeaccount) {
+            [listOfUsersWithouActive addObject:current];
+        }
+    }
+    
+    return listOfUsersWithouActive;
 }
 
 #pragma mark - Check Server version in order to use chunks to upload or not
@@ -1278,23 +1249,41 @@
 
 #pragma mark - UIActionSheetDelegate
 
--(void)actionSheet:(UIActionSheet *)actionSheet clickedButtonAtIndex:(NSInteger)buttonIndex {
-    switch (buttonIndex) {
-        case 0:
-            DLog(@"Facebook");
-            [self publishFacebook];
-            break;
-        case 1:
-            DLog(@"Twitter");
-            [self publishTwitter];
-            break;
-        case 2:
-            DLog(@"Mail");
-            [self sendRecommendacionByMail];
-            break;
-        case 3:
-            DLog(@"Cancel Button Clicked");
-            break;
+- (void)actionSheet:(UIActionSheet *)actionSheet didDismissWithButtonIndex:(NSInteger)buttonIndex {
+
+    if (actionSheet.tag == k_tag_actionSheet_recommend) {
+        
+        switch (buttonIndex) {
+            case 0:
+                DLog(@"Facebook");
+                [self publishFacebook];
+                break;
+            case 1:
+                DLog(@"Twitter");
+                [self publishTwitter];
+                break;
+            case 2:
+                DLog(@"Mail");
+                [self sendRecommendacionByMail];
+                break;
+            case 3:
+                DLog(@"Cancel Button Clicked");
+                break;
+        }
+    } else if (actionSheet.tag == k_tag_actionSheet_menu_account) {
+        switch (buttonIndex) {
+            case 0:
+                [self didSelectEditAccount:self.selectedUserAccount];
+                break;
+            case 1:
+                [self didSelectClearCacheAccount:self.selectedUserAccount];
+                break;
+            case 2:
+                [self dicSelectLogOutAccount:self.selectedUserAccount];
+                break;
+            default:
+                break;
+        }
     }
 }
 
@@ -1567,8 +1556,8 @@
     }
 }
 
-#pragma mark - MFMailComposeController delegate
 
+#pragma mark - MFMailComposeController delegate
 
 - (void)mailComposeController:(MFMailComposeViewController*)controller didFinishWithResult:(MFMailComposeResult)result error:(NSError*)error
 {
@@ -1607,8 +1596,8 @@
    
 }
 
-#pragma mark - KKPasscodeViewController delegate methods
 
+#pragma mark - KKPasscodeViewController delegate methods
 
 ///-----------------------------------
 /// @name Changes in Pass Code
@@ -1639,265 +1628,200 @@
     
     //Refresh the switch pass code
     [self.switchPasscode setOn:[ManageAppSettingsDB isPasscode] animated:NO];
+    [self.settingsTableView reloadData];
+
     
 }
 
+#pragma mark - Touch ID methods
 
-#pragma mark - Instant Upload - Location Support
-
-- (void)switchInstantUploadTo:(BOOL)value {
-     [self.switchInstantUpload setOn:value animated:NO];
+- (void)switchTouchIDTo:(BOOL)value {
+    [self.switchTouchID setOn:value animated:NO];
 }
 
--(void)setPropertiesInstantUploadToState:(BOOL)stateInstantUpload{
+-(BOOL)isTouchIDAvailable {
+    return [[ManageTouchID sharedSingleton] isTouchIDAvailable];
+}
+
+-(void)setPropertiesTouchIDToState:(BOOL)isTocuhIDActive{
     
-    AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication] delegate];
-    if (app.activeUser.username == nil) {
-        app.activeUser = [ManageUsersDB getActiveUser];
-    }
-    
-    if (stateInstantUpload) {
-        [self switchInstantUploadTo:YES];
-        app.activeUser.instantUpload = YES;
-        [ManageAppSettingsDB updateInstantUploadTo:YES];
+    if (isTocuhIDActive) {
+        [self switchTouchIDTo:YES];
+        [ManageAppSettingsDB updateTouchIDTo:YES];
     } else {
-        [self switchInstantUploadTo:NO];
-        app.activeUser.instantUpload = NO;
-        [ManageAppSettingsDB updateInstantUploadTo:NO];
-        [[ManageLocation sharedSingleton] stopSignificantChangeUpdates];
+        [self switchTouchIDTo:NO];
+        [ManageAppSettingsDB updateTouchIDTo:NO];
     }
 }
 
--(void)setDateInstantUpload{
-    AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication] delegate];
-    if (app.activeUser.username == nil) {
-        app.activeUser = [ManageUsersDB getActiveUser];
-    }
-    
-    long dateInstantUpload = [[NSDate date] timeIntervalSince1970];
-    app.activeUser.dateInstantUpload = dateInstantUpload;
-    [ManageAppSettingsDB updateDateInstantUpload:dateInstantUpload];
-}
+#pragma mark - Instant Upload
 
 -(IBAction)changeSwitchInstantUpload:(id)sender {
-    
-    [self switchInstantUploadTo:NO];
+    UISwitch *uiSwitch = (UISwitch *)sender;
+    [[InstantUpload instantUploadManager] setEnabled:uiSwitch.on];
+    [self refreshTable];
+}
 
-    if(![ManageAppSettingsDB isInstantUpload]) {
-       [self checkIfLocationIsEnabled];
+-(IBAction)changeSwitchBackgroundInstantUpload:(id)sender {
+    UISwitch *uiSwitch = (UISwitch *)sender;
+    [[InstantUpload instantUploadManager] setBackgroundInstantUploadEnabled:uiSwitch.on];
+}
+
+#pragma mark - Semaphore
+
+- (void) releaseSemaphoreToContinueChangingUser {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        dispatch_semaphore_signal(self.semaphoreChangeUser);
+        
+        [AppDelegate sharedSyncFolderManager].delegate = nil;
+    });
+}
+
+
+# pragma mark - menu account
+
+- (void)showMenuAccountOptions:(UIButton *)sender {
+
+    self.selectedUserAccount = [self.listUsers objectAtIndex:sender.tag];
+    NSString *titleMenu = [NSString stringWithFormat:@"%@@%@",self.selectedUserAccount .username,self.selectedUserAccount .url];
+    
+    if (self.menuAccountActionSheet) {
+        self.menuAccountActionSheet = nil;
+    }
+    
+    self.menuAccountActionSheet = [[UIActionSheet alloc]
+                                   initWithTitle:titleMenu
+                                   delegate:self
+                                   cancelButtonTitle:NSLocalizedString(@"cancel", nil)
+                                   destructiveButtonTitle:nil
+                                   otherButtonTitles:NSLocalizedString(@"menu_account_edit", nil), NSLocalizedString(@"menu_account_clear_cache", nil), NSLocalizedString(@"menu_account_log_out", nil), nil];
+    
+    self.menuAccountActionSheet.actionSheetStyle = UIActionSheetStyleDefault;
+    self.menuAccountActionSheet.tag = k_tag_actionSheet_menu_account;
+    
+    if (IS_IPHONE) {
+        [self.menuAccountActionSheet showInView:self.tabBarController.view];
     } else {
-        //Dissable mode
-        [self setPropertiesInstantUploadToState:NO];
+        
+        AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
+        [self.menuAccountActionSheet showInView:app.splitViewController.view];
     }
 }
 
 
--(void)checkIfLocationIsEnabled {
-    [ManageLocation sharedSingleton].delegate = self;
-    
-    if ([CLLocationManager locationServicesEnabled]) {
-        
-        DLog(@"authorizationStatus: %d", [CLLocationManager authorizationStatus]);
-        
-        if ([CLLocationManager authorizationStatus] != kCLAuthorizationStatusAuthorizedAlways) {
-            
-            if ([CLLocationManager authorizationStatus] == kCLAuthorizationStatusNotDetermined ) {
-                
-                DLog(@"Location services not determined");
-                [[ManageLocation sharedSingleton] startSignificantChangeUpdates];
-                
-            } else {
-                
-                if ([ALAssetsLibrary authorizationStatus] == ALAuthorizationStatusAuthorized) {
-                    [ManageAppSettingsDB updateInstantUploadTo:NO];
-                    UIAlertView *alert = [[UIAlertView alloc] initWithTitle:NSLocalizedString(@"location_not_enabled", nil)
-                                                                    message:NSLocalizedString(@"message_location_not_enabled", nil)
-                                                                   delegate:nil
-                                                          cancelButtonTitle:NSLocalizedString(@"ok", nil)
-                                                          otherButtonTitles:nil];
-                    [alert show];
-                } else {
-                    UIAlertView *alert = [[UIAlertView alloc] initWithTitle:NSLocalizedString(@"access_photos_and_location_not_enabled", nil)
-                                                                    message:NSLocalizedString(@"message_access_photos_and_location_not_enabled", nil)
-                                                                   delegate:nil
-                                                          cancelButtonTitle:NSLocalizedString(@"ok", nil)
-                                                          otherButtonTitles:nil];
-                    [alert show];
-                }
-            }
-        } else {
-            
-            if ([ALAssetsLibrary authorizationStatus] == ALAuthorizationStatusAuthorized) {
-                if(![ManageAppSettingsDB isInstantUpload]) {
-                    [self setDateInstantUpload];
-                }
-                
-                [self setPropertiesInstantUploadToState:YES];
-                [[ManageLocation sharedSingleton] startSignificantChangeUpdates];
-                ManageAsset * manageAsset = [[ManageAsset alloc] init];
-                NSArray * newItemsToUpload = [manageAsset getCameraRollNewItems];
-                if (newItemsToUpload != nil && [newItemsToUpload count] != 0) {
-                    [self initPrepareFiles:newItemsToUpload andRemoteFolder:k_path_instant_upload];
-                }
-            } else {
-                [self setPropertiesInstantUploadToState:NO];
-                UIAlertView * alert = [[UIAlertView alloc] initWithTitle:NSLocalizedString(@"access_photos_library_not_enabled", nil)
-                                                                 message:NSLocalizedString(@"message_access_photos_not_enabled", nil)
-                                                                delegate:nil
-                                                       cancelButtonTitle:NSLocalizedString(@"ok", nil)
-                                                       otherButtonTitles:nil];
-                [alert show];
-            }
-        }
-    } else {
-        
-        [self setPropertiesInstantUploadToState:NO];
-        if ([ALAssetsLibrary authorizationStatus] == ALAuthorizationStatusAuthorized) {
-            UIAlertView *alert = [[UIAlertView alloc] initWithTitle:NSLocalizedString(@"location_not_enabled", nil)
-                                                            message:NSLocalizedString(@"message_location_not_enabled", nil)
-                                                           delegate:nil
-                                                  cancelButtonTitle:NSLocalizedString(@"ok", nil)
-                                                  otherButtonTitles:nil];
-            [alert show];
-        } else {
-            UIAlertView *alert = [[UIAlertView alloc] initWithTitle:NSLocalizedString(@"access_photos_and_location_not_enabled", nil)
-                                                            message:NSLocalizedString(@"message_access_photos_and_location_not_enabled", nil)
-                                                           delegate:nil
-                                                  cancelButtonTitle:NSLocalizedString(@"ok", nil)
-                                                  otherButtonTitles:nil];
-            [alert show];
-        }
-    }
-}
+#pragma mark - Options menu account
 
-
--(void)initStateInstantUpload{
-    
-    [self switchInstantUploadTo:NO];
-    
-    if([ManageAppSettingsDB isInstantUpload]) {
-        [self checkIfLocationIsEnabled];
-    } else {
-        //Dissable mode
-        [self setPropertiesInstantUploadToState:NO];
-    }
-    
-}
-
-- (void) initPrepareFiles:(NSArray *) newAsssets andRemoteFolder: (NSString *) remoteFolder{
-    
-    AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication] delegate];
-    
-    if(app.prepareFiles == nil) {
-        app.prepareFiles = [[PrepareFilesToUpload alloc] init];
-        app.prepareFiles.listOfFilesToUpload = [[NSMutableArray alloc] init];
-        app.prepareFiles.listOfAssetsToUpload = [[NSMutableArray alloc] init];
-        app.prepareFiles.arrayOfRemoteurl = [[NSMutableArray alloc] init];
-        app.prepareFiles.listOfUploadOfflineToGenerateSQL = [[NSMutableArray alloc] init];
-    }
-    app.prepareFiles.delegate = app;
-    app.prepareFiles.counterUploadFiles = 0;
-    app.uploadTask = [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
-        // If you’re worried about exceeding 10 minutes, handle it here
-    }];
-    
-    [app.prepareFiles addAssetsToUpload: newAsssets andRemoteFolder: remoteFolder];
-  
+- (void) didSelectEditAccount:(UserDto *)user  {
    
+    EditAccountViewController *viewController = [[EditAccountViewController alloc]initWithNibName:@"EditAccountViewController_iPhone" bundle:nil  andUser:user];
+    
+    if (IS_IPHONE) {
+        viewController.hidesBottomBarWhenPushed = YES;
+        [self.navigationController pushViewController:viewController animated:YES];
+    } else {
+        AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
+        
+        OCNavigationController *navController = [[OCNavigationController alloc] initWithRootViewController:viewController];
+        navController.modalPresentationStyle = UIModalPresentationFormSheet;
+        [app.splitViewController presentViewController:navController animated:YES completion:nil];
+    }
+
 }
 
-#pragma mark - ManageLocationDelegate Method
+- (void) didSelectClearCacheAccount:(UserDto *)user {
 
-- (void)statusAuthorizationLocationChanged{
+    [[OCLoadingSpinner sharedOCLoadingSpinner] initLoadingForViewController: self];
     
-    if ([CLLocationManager authorizationStatus] != kCLAuthorizationStatusNotDetermined){
+    dispatch_async( dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         
-        if (![ManageLocation sharedSingleton].firstChangeAuthorizationDone) {
-            ALAssetsLibrary *assetLibrary = [UploadUtils defaultAssetsLibrary];
-            [assetLibrary enumerateGroupsWithTypes:ALAssetsGroupSavedPhotos
-                                        usingBlock:^(ALAssetsGroup *group, BOOL *stop) {
-                                            
-                                        } failureBlock:^(NSError *error) {
-                                            
-                                        }];
-        }
-        
-        if ([CLLocationManager authorizationStatus] == kCLAuthorizationStatusAuthorizedAlways) {
+        void (^deletionBlock)(void) = ^{
             
-            if ([ALAssetsLibrary authorizationStatus] == ALAuthorizationStatusAuthorized) {
-                
-                if (![ManageLocation sharedSingleton].firstChangeAuthorizationDone) {
-                    //activated only when user allow location first alert
-                    [self setPropertiesInstantUploadToState:YES];
-                    [self setDateInstantUpload];
-                } else {
-                    [self setPropertiesInstantUploadToState:NO];
-                }
-            } else {
-                UIAlertView * alert = [[UIAlertView alloc] initWithTitle:NSLocalizedString(@"access_photos_library_not_enabled", nil)
-                                                                 message:NSLocalizedString(@"message_access_photos_not_enabled", nil)
-                                                                delegate:nil
-                                                       cancelButtonTitle:NSLocalizedString(@"ok", nil)
-                                                       otherButtonTitles:nil];
-                [alert show];
-            }
-        } else if ([CLLocationManager authorizationStatus] != kCLAuthorizationStatusNotDetermined){
-            if([ManageAppSettingsDB isInstantUpload]) {
-                [self setPropertiesInstantUploadToState:NO];
-                
-                if ([ALAssetsLibrary authorizationStatus] == ALAuthorizationStatusAuthorized) {
-                    UIAlertView *alert = [[UIAlertView alloc] initWithTitle:NSLocalizedString(@"location_not_enabled", nil)
-                                                                    message:NSLocalizedString(@"message_location_not_enabled", nil)
-                                                                   delegate:nil
-                                                          cancelButtonTitle:NSLocalizedString(@"ok", nil)
-                                                          otherButtonTitles:nil];
-                    [alert show];
-                    
-                } else {
-                    UIAlertView *alert = [[UIAlertView alloc] initWithTitle:NSLocalizedString(@"access_photos_and_location_not_enabled", nil)
-                                                                    message:NSLocalizedString(@"message_access_photos_and_location_not_enabled", nil)
-                                                                   delegate:nil
-                                                          cancelButtonTitle:NSLocalizedString(@"ok", nil)
-                                                          otherButtonTitles:nil];
-                    [alert show];
-                }
-            }
-        }
+            [DeleteUtils deleteAllDownloadedFilesByUser:user];
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [[OCLoadingSpinner sharedOCLoadingSpinner]  endLoading];
+            });
+        };
         
-        if (![ManageLocation sharedSingleton].firstChangeAuthorizationDone) {
-            [ManageLocation sharedSingleton].firstChangeAuthorizationDone = YES;
+        deletionBlock();
+        
+    });
+}
+
+- (void) dicSelectLogOutAccount:(UserDto *)user {
+    
+    [self performSelectorInBackground:@selector(cancelAllDownloads) withObject:nil];
+    
+    [[ManageThumbnails sharedManager] deleteThumbnailCacheFolderOfUserId: user.idUser];
+    
+    //Delete the tables of this user
+    [ManageUsersDB removeUserAndDataByIdUser: user.idUser];
+    
+    [self performSelectorInBackground:@selector(cancelAndRemoveFromTabRecentsAllInfoByUser:) withObject:user];
+    
+    //Delete files of user in the system
+    NSString *userFolder = [NSString stringWithFormat:@"/%ld",(long)user.idUser];
+    NSString *path= [[UtilsUrls getOwnCloudFilePath] stringByAppendingPathComponent:userFolder];
+    NSError *error;
+    [[NSFileManager defaultManager] removeItemAtPath:path error:&error];
+    
+    //if previous account is active we active the first by iduser
+    if(user.activeaccount) {
+        
+        [ManageUsersDB setActiveAccountAutomatically];
+        
+        //Update in appDelegate the active user
+        APP_DELEGATE.activeUser = [ManageUsersDB getActiveUser];
+        
+        [self setCookiesOfActiveAccount];
+        
+        [self createFolderForUser:APP_DELEGATE.activeUser];
+        
+        //If ipad, clean the detail view
+        if (!IS_IPHONE) {
+            AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
+            [app presentWithView];
         }
     }
     
+    self.listUsers = [ManageUsersDB getAllUsers];
+    
+    if([self.listUsers count] > 0) {
+        [self.settingsTableView performSelectorOnMainThread:@selector(reloadData) withObject:nil waitUntilDone:NO];
+    } else {
+        
+        self.settingsTableView.editing = NO;
+        
+        AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
+        
+        [self cancelAllDownloads];
+        app.uploadArray=[[NSMutableArray alloc]init];
+        [app updateRecents];
+        [app restartAppAfterDeleteAllAccounts];
+    }
 }
 
 
--(void) changedLocation{
-    
-    NSArray * newItemsToUpload = [[NSArray alloc]init];
-    
-    if([ManageAppSettingsDB isInstantUpload]) {
-        
-        if ([ALAssetsLibrary authorizationStatus] == ALAuthorizationStatusAuthorized) {
-            //check location
-            if ([CLLocationManager authorizationStatus] == kCLAuthorizationStatusAuthorizedAlways) {
-                //upload new photos
-                ManageAsset * manageAsset = [[ManageAsset alloc] init];
-                newItemsToUpload = [manageAsset getCameraRollNewItems];
-                if (newItemsToUpload != nil && [newItemsToUpload count] != 0) {
-                    [self initPrepareFiles:newItemsToUpload andRemoteFolder:k_path_instant_upload];
-                }
-            }
-        } else {
-            [self setPropertiesInstantUploadToState:NO];
-        }
+#pragma mark - iOS 8 rotation method
+
+- (void)viewWillTransitionToSize:(CGSize)size withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator {
+
+    if (self.menuAccountActionSheet) {
+        [self.menuAccountActionSheet dismissWithClickedButtonIndex:3 animated:NO];
     }
+    if (self.popupQuery) {
+        [self.popupQuery dismissWithClickedButtonIndex:3 animated:NO];
+    }
+
+}
+
+#pragma mark InstantUploadDelegate methods
+
+- (void) instantUploadPermissionLostOrDenied {
+    self.switchInstantUpload.on = NO;
+}
+
+- (void) backgroundInstantUploadPermissionLostOrDenied {
+    self.switchBackgroundInstantUpload.on = NO;
 }
 
 @end
-
-
-
-
-
-

@@ -40,6 +40,7 @@
 #import "UploadsOfflineDto.h"
 #import "ManageUploadsDB.h"
 #import "UtilsDtos.h"
+#import "ManageTouchID.h"
 
 @interface DocumentPickerViewController ()
 
@@ -75,6 +76,8 @@
     
     if ([ManageAppSettingsDB isPasscode]) {
         [self showPassCode];
+        if([ManageAppSettingsDB isTouchID])
+            [[ManageTouchID sharedSingleton] showTouchIDAuth];
     } else {
         [self showOwnCloudNavigationOrShowErrorLogin];
     }
@@ -112,10 +115,9 @@
 
         [self presentViewController:navigationViewController animated:NO completion:^{
             //We check the connection here because we need to accept the certificate on the self signed server before go to the files tab
-            CheckAccessToServer *mCheckAccessToServer = [[CheckAccessToServer alloc] init];
-            mCheckAccessToServer.viewControllerToShow = fileListTableViewController;
-            mCheckAccessToServer.delegate = fileListTableViewController;
-            [mCheckAccessToServer isConnectionToTheServerByUrl:[UtilsUrls getFullRemoteServerPath:self.user]];
+            ((CheckAccessToServer *)[CheckAccessToServer sharedManager]).viewControllerToShow = fileListTableViewController;
+            ((CheckAccessToServer *)[CheckAccessToServer sharedManager]).delegate = fileListTableViewController;
+            [[CheckAccessToServer sharedManager] isConnectionToTheServerByUrl:self.user.url];
         }];
         
     } else {
@@ -179,8 +181,10 @@
         }
     }
     
-    if (![[NSFileManager defaultManager] copyItemAtURL:originUrl toURL:destinationUrl error:&error]) {
-        NSLog(@"Error copyng file: %@", error);
+    if ([[NSFileManager defaultManager] fileExistsAtPath:fileDto.localFolder]) {
+        if (![[NSFileManager defaultManager] copyItemAtURL:originUrl toURL:destinationUrl error:&error]) {
+            NSLog(@"Error copyng file: %@", error);
+        }
     }
     
     NSDictionary *attributes = nil;

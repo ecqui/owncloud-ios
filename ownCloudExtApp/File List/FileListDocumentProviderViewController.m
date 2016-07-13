@@ -45,6 +45,8 @@ NSString *userHasCloseDocumentPicker = @"userHasCloseDocumentPicker";
 
 - (void) viewWillAppear:(BOOL)animated {
     
+    self.user = [ManageUsersDB getActiveUser];
+    
     //We need to catch the rotation notifications only in iPhone.
     if (IS_IPHONE && self.isNecessaryAdjustThePositionAndTheSizeOfTheNavigationBar) {
         [[UIDevice currentDevice] beginGeneratingDeviceOrientationNotifications];
@@ -175,10 +177,13 @@ NSString *userHasCloseDocumentPicker = @"userHasCloseDocumentPicker";
 
 - (void)downloadCompleted:(FileDto*)fileDto{
     
-    self.selectedFile = nil;
     [self setLockedApperance:NO];
     
-    [self.delegate openFile:fileDto];
+    if (fileDto) {
+        [self.delegate openFile:fileDto];
+    }
+    
+    self.selectedFile = nil;
 }
 
 - (void)downloadFailed:(NSString*)string andFile:(FileDto*)fileDto{
@@ -300,7 +305,6 @@ NSString *userHasCloseDocumentPicker = @"userHasCloseDocumentPicker";
         }
         
         
-        //Add a FileDownloadedIcon.png in the left of cell when the file is in device
         if (![file isDirectory]) {
             //Is file
             //Font for file
@@ -337,6 +341,10 @@ NSString *userHasCloseDocumentPicker = @"userHasCloseDocumentPicker";
                     fileCell.labelInfoFile.text = [NSString stringWithFormat:@"%@, %@", fileDateString, fileSizeString];
                 }
             }
+            
+            //Thumbnail
+            fileCell.thumbnailSessionTask = [InfoFileUtils updateThumbnail:file andUser:self.user tableView:tableView cellForRowAtIndexPath:indexPath];
+            
         } else {
             //Is directory
             //Font for folder
@@ -352,9 +360,7 @@ NSString *userHasCloseDocumentPicker = @"userHasCloseDocumentPicker";
             fileCell.labelInfoFile.text = [NSString stringWithFormat:@"%@", fileDateString];
         }
         
-        
-        fileCell = (DocumentPickerCell*)[InfoFileUtils getTheStatusIconOntheFile:file onTheCell:fileCell andCurrentFolder:self.currentFolder];
-        
+        fileCell = (DocumentPickerCell*)[InfoFileUtils getTheStatusIconOntheFile:file onTheCell:fileCell andCurrentFolder:self.currentFolder andIsSonOfFavoriteFolder:NO ofUser:self.user];
         
         //Lock apperance
         if (self.isLockedApperance && file.idFile != self.selectedFile.idFile) {
@@ -399,7 +405,6 @@ NSString *userHasCloseDocumentPicker = @"userHasCloseDocumentPicker";
     }
     return cell;
 }
-
 
 
 #pragma mark - Check User

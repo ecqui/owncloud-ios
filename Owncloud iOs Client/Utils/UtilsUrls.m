@@ -34,6 +34,14 @@
     NSString *bundleSecurityGroup = [self getBundleOfSecurityGroup];
     
     output = [[[NSFileManager defaultManager] containerURLForSecurityApplicationGroupIdentifier:bundleSecurityGroup] path];
+    
+    if (!output) {
+        NSLog(@"ERROR Getting the AppGroup: You will not be able to use neither the Document Provider or other extensions. This problem is related to the generation of certificates, provisioning profiles and the AppGroup. Please, read the Documentation of the project to fix it (https://github.com/owncloud/ios/blob/develop/SETUP.md)");
+        
+        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+        output = paths.firstObject;
+    }
+        
     output = [NSString stringWithFormat:@"%@/%@",output, k_owncloud_folder];
     
     BOOL isDirectory;
@@ -97,6 +105,10 @@
     
     return output;
     
+}
+
++ (NSString *) getThumbnailFolderPath {
+    return [NSString stringWithFormat:@"%@%@", [self getOwnCloudFilePath], k_thumbnails_cache_folder_name];
 }
 
 //Method to skip a file to a iCloud backup
@@ -170,7 +182,7 @@
 }
 
 ///-----------------------------------
-/// @name getLocalFolderByFilePath
+/// @name getLocalFolderByFilePath:andFileName:andUserDto
 ///-----------------------------------
 /**
  * Return the file path without
@@ -294,6 +306,50 @@
     return pathOnDB;
 }
 
+//----------------------------------------------
+/// @name getFilePathOnDBWithFileName:ByFilePathOnFileDto:andUser
+///---------------------------------------------
+/**
+ * Return the part of file path that is valid in the data base with also the fileName by filePath on FileDto andUser
+ *
+ * @param fileName -> text.pdf
+ * @param filePathOnFileDto -> root folder -> /(subfoldersServer)/k_url_webdav_server/
+ *                          -> subfolders  -> /(subfoldersServer)/k_url_webdav_server/(subfoldersDB)
+ * @param user
+ *
+ * @return pathOnDB -> root folder -> @"text.pdf"
+ *                  -> subfolders  -> @"(subfoldersDB)/text.pdf"
+ *
+ */
++ (NSString *) getFilePathOnDBWithFileName:(NSString *)fileName ByFilePathOnFileDto:(NSString *)filePathOnFileDto andUser:(UserDto *) user {
+    
+    NSString *filePath = [NSString stringWithFormat: @"%@%@", [UtilsUrls getFilePathOnDBByFilePathOnFileDto:filePathOnFileDto andUser:user], fileName];
+    
+    return filePath;
+}
+
+//----------------------------------------------
+/// @name getFilePathOnDBwithRootSlashAndWithFileName:ByFilePathOnFileDto:andUser
+///---------------------------------------------
+/**
+ * Return the part of file path that is valid in the data base with a root slash and also the fileName by filePath on FileDto andUser
+ *
+ * @param fileName -> text.pdf
+ * @param filePathOnFileDto -> root folder -> /(subfoldersServer)/k_url_webdav_server/
+ *                          -> subfolders  -> /(subfoldersServer)/k_url_webdav_server/(subfoldersDB)
+ * @param user
+ *
+ * @return pathOnDB -> root folder -> @"/text.pdf"
+ *                  -> subfolders  -> @"/(subfoldersDB)/text.pdf"
+ *
+ */
++ (NSString *) getFilePathOnDBwithRootSlashAndWithFileName:(NSString *)fileName ByFilePathOnFileDto:(NSString *)filePathOnFileDto andUser:(UserDto *) user {
+    
+    NSString *filePath = [NSString stringWithFormat:@"/%@%@", [UtilsUrls getFilePathOnDBByFilePathOnFileDto:filePathOnFileDto andUser:user], fileName];
+
+    return filePath;
+}
+
 
 ///-----------------------------------
 /// @name getFullRemoteServerPath
@@ -338,7 +394,7 @@
 }
 
 ///-----------------------------------
-/// @name getFullRemoteWebDavPath
+/// @name getFullRemoteServerPathWithWebDav
 ///-----------------------------------
 /**
  * Return the full server path with webdav components
@@ -462,7 +518,6 @@
  * Method to get full file path
  *
  * @param file -> fileDto
- *
  * @param user -> userDto
  *
  * @return fullFilePath ->subfolders  -> http://domain/(subfoldersServer)/k_url_webdav_server/(subfoldersDB)/(filename)
@@ -471,6 +526,27 @@
 + (NSString *)getFullRemoteServerFilePathByFile:(FileDto *) file andUser:(UserDto *) user {
     
     NSString *fullFilePath = [NSString stringWithFormat:@"%@%@%@",[UtilsUrls getRemoteServerPathWithoutFolders:user],file.filePath,file.fileName];
+    
+    DLog(@"fullFilePath: %@", fullFilePath);
+    
+    return fullFilePath;
+}
+
+//----------------------------------------------
+/// @name getFullRemoteServerParentPathByFile
+///---------------------------------------------
+/**
+ * Method to get full file path
+ *
+ * @param file -> fileDto
+ * @param user -> userDto
+ *
+ * @return fullFilePath ->subfolders  -> http://domain/(subfoldersServer)/k_url_webdav_server/(subfoldersDB)
+ *
+ */
++ (NSString *)getFullRemoteServerParentPathByFile:(FileDto *) file andUser:(UserDto *) user {
+    
+    NSString *fullFilePath = [NSString stringWithFormat:@"%@%@",[UtilsUrls getRemoteServerPathWithoutFolders:user],file.filePath];
     
     DLog(@"fullFilePath: %@", fullFilePath);
     
@@ -510,6 +586,93 @@
     }
     
     return isFileUploading;
+}
+
+///-----------------------------------
+/// @name getKeyByLocalPath
+///-----------------------------------
+/**
+ * Return the key that identify a file in the dictionary for download a full folder
+ *
+ * @param localPath -> /Users/Javi/Library/Developer/CoreSimulator/Devices/3A4FE170-2053-4D9E-9FF0-D2F5FC65C2D4/data/Containers/Shared/AppGroup/8F60BA9F-0A8B-472E-AC05-00A8A66F6CFC/cache_folder/3/Documents/
+ *                    -> /Users/Javi/Library/Developer/CoreSimulator/Devices/3A4FE170-2053-4D9E-9FF0-D2F5FC65C2D4/data/Containers/Shared/AppGroup/8F60BA9F-0A8B-472E-AC05-00A8A66F6CFC/cache_folder/3/Documents/File.pdf
+ *
+ * @return  pathWithAppName -> Documents/
+ *                          -> Documents/File.pdf
+ */
++ (NSString *) getKeyByLocalFolder:(NSString *) localFolder {
+    
+    NSString *key = [localFolder substringFromIndex:[[self getOwnCloudFilePath] length]];
+    NSArray *pathDivided = [key componentsSeparatedByString:@"/"];
+    
+    key = [key substringFromIndex:[[pathDivided objectAtIndex:0] length] + 1];
+    
+    return key;
+}
+
+//-----------------------------------
+/// @name getFileLocalSystemPathByFullPath
+///-----------------------------------
+
+/**
+ * Method used to get the system path of a file according to the remote path and the user
+ *
+ * @param NSString -> fullRemotePath -->http://domain/(subfolders)/k_url_webdav_server/folderA/fileA.txt
+ * @param UserDto -> user
+ *
+ * @return NSString fullLocalDestiny --> /fullLocalSystemPath/idUser/folderA/fileA.txt
+ *
+ */
++ (NSString *) getFileLocalSystemPathByFullPath:(NSString *)fullRemotePath andUser:(UserDto *)user{
+
+    NSString *localDestiny = [UtilsUrls  getFilePathOnDBByFullPath:fullRemotePath andUser:user];
+    
+    NSString *ocLocalFolder = [[UtilsUrls getOwnCloudFilePath] stringByAppendingPathComponent:[NSString stringWithFormat:@"%ld", (long)user.idUser]];
+
+    NSString *fullLocalDestiny = [NSString stringWithFormat:@"%@/%@",ocLocalFolder,[localDestiny stringByReplacingPercentEscapesUsingEncoding:NSUTF8StringEncoding]];
+
+    return fullLocalDestiny;
+}
+
+//-----------------------------------
+/// @name getFileLocalSystemPathByFileDto
+///-----------------------------------
+
+/**
+ * Method used to get the system path of a file according to a fileDto and a user
+ *
+ * @param FileDto ->  fileDto
+ * @param UserDto ->  user
+ *
+ * @return NSString fullLocalDestiny --> /fullLocalSystemPath/idUser/folderA/fileA.txt
+ *
+ */
++ (NSString *) getFileLocalSystemPathByFileDto:(FileDto *)fileDto andUser:(UserDto *)user{
+    
+    NSString *ocLocalFolder = [[UtilsUrls getOwnCloudFilePath] stringByAppendingPathComponent:[NSString stringWithFormat:@"%ld", (long)user.idUser]];
+    NSString *fullDBPath = [self getFilePathOnDBWithFileName:fileDto.fileName ByFilePathOnFileDto:fileDto.filePath andUser:user];
+    NSString *fullLocalDestiny = [NSString stringWithFormat:@"%@/%@",ocLocalFolder,[fullDBPath stringByReplacingPercentEscapesUsingEncoding:NSUTF8StringEncoding]];
+    
+    return fullLocalDestiny;
+}
+
+//-----------------------------------
+/// @name getLocalCertificatesPath
+///-----------------------------------
+
+/**
+ * Method used to get the system path of the certificates
+ *
+ * @return NSString localCertificatesPath --> /fullLocalSystemPath/Certificates/
+ *
+ */
++ (NSString *) getLocalCertificatesPath{
+    
+    NSString *documentsDirectory = [UtilsUrls getOwnCloudFilePath];
+    
+    NSString *localCertificatesPath = [NSString stringWithFormat:@"%@Certificates/",documentsDirectory];
+    
+    return localCertificatesPath;
 }
 
 @end

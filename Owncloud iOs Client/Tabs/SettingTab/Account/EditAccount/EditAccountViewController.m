@@ -25,6 +25,7 @@
 #import "UtilsCookies.h"
 #import "UtilsFramework.h"
 #import "ManageCookiesStorageDB.h"
+#import "CheckCapabilities.h"
 
 
 //Initialization the notification
@@ -79,7 +80,6 @@ NSString *relaunchErrorCredentialFilesNotification = @"relaunchErrorCredentialFi
 - (void)setBarForCancelForLoadingFromModal {
     
     UIBarButtonItem *cancelButton = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemCancel target:self action:@selector(closeViewController)];
-	//[self.navigationItem setRightBarButtonItem:cancelButton];
     [self.navigationItem setLeftBarButtonItem:cancelButton];
 }
 
@@ -146,7 +146,7 @@ NSString *relaunchErrorCredentialFilesNotification = @"relaunchErrorCredentialFi
     
     [self restoreTheCookiesOfActiveUser];
 
-    mCheckAccessToServer.delegate = nil;
+    ((CheckAccessToServer *)[CheckAccessToServer sharedManager]).delegate = nil;
 }
 
 
@@ -295,7 +295,13 @@ NSString *relaunchErrorCredentialFilesNotification = @"relaunchErrorCredentialFi
         self.selectedUser.password = self.passwordTextField.text;
         
         [self hideTryingToLogin];
+        
         [ManageUsersDB updatePassword:self.selectedUser];
+        
+        //Update capabilities of the active account
+        if (self.selectedUser.activeaccount) {
+            [[CheckCapabilities sharedCheckCapabilities] updateServerCapabilitiesOfActiveAccount];
+        }
         
         //Change the state of the of the user uploads with credential error
         [ManageUploadsDB updateErrorCredentialFiles:_selectedUser.idUser];

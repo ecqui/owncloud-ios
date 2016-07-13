@@ -58,19 +58,24 @@
 #import "ManageUsersDB.h"
 #import "UtilsFramework.h"
 #import "ShareMainViewController.h"
-
+#import "SyncFolderManager.h"
+#import "IndexedForest.h"
+#import "ManageCapabilitiesDB.h"
+#import "CheckCapabilities.h"
+#import "SortManager.h"
+#import "EditFileViewController.h"
 
 //Constant for iOS7
 #define k_status_bar_height 20
 #define k_navigation_bar_height 44
 #define k_navigation_bar_height_in_iphone_landscape 32
-#define k_footer_label_width 320
-
 
 @interface FilesViewController ()
 
 @property (nonatomic, strong) ELCAlbumPickerController *albumController;
 @property (nonatomic, strong) ELCImagePickerController *elcPicker;
+@property (nonatomic) BOOL didLayoutSubviews;
+@property (nonatomic) BOOL willLayoutSubviews;
 
 @end
 
@@ -126,11 +131,7 @@
     
     _showLoadingAfterChangeUser = NO;
     _checkingEtag = NO;
-    
-    if(_mCheckAccessToServer == nil) {
-        self.mCheckAccessToServer = [[CheckAccessToServer alloc] init];
-        self.mCheckAccessToServer.delegate = self;
-    }
+    ((CheckAccessToServer *)[CheckAccessToServer sharedManager]).delegate = self;
     
     //We check if the user have root folder at true on the DB
     if(!self.fileIdToShowFiles || self.fileIdToShowFiles.isRootFolder) {
@@ -147,6 +148,9 @@
     } else {
         self.currentFileShowFilesOnTheServerToUpdateTheLocalFile = [ManageFilesDB getFileDtoByIdFile:fileIdToShowFiles];
     }
+    
+    self.didLayoutSubviews = false;
+    self.willLayoutSubviews = false;
     
     DLog(@"currentRemoteFolder: %@ and fileIdToShowFiles: %ld", currentFolder, (long)self.fileIdToShowFiles.idFile);
     self = [super initWithNibName:nibNameOrNil bundle:nil];
@@ -175,8 +179,8 @@
     //Store the new active user, maybe can be different in the future in this same view
     _mUser = app.activeUser;
     
-    //Add a plus button
-    UIBarButtonItem *addButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemAdd target:self action:@selector(showOptions)];
+    //Add a more button
+    UIBarButtonItem *addButtonItem = [[UIBarButtonItem alloc] initWithImage:[UIImage imageNamed:@"more-filled"] style:UIBarButtonItemStylePlain target:self action:@selector(showOptions)];
     self.navigationItem.rightBarButtonItem = addButtonItem;
     
     // Create a searchBar and a displayController "Future Option"
@@ -206,16 +210,13 @@
     
     [_tableView addSubview:_refreshControl];
 
-    //Only for iOS 7
-    if (IS_IOS7) {
-        //This new feature of iOS 7 indicate the extend of the edges of the view
-        self.edgesForExtendedLayout = UIRectEdgeAll;//UIRectCornerAllCorners;
-    }
 }
 
 
 - (void) viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
+    
+    self.didLayoutSubviews = true;
     
     AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
     
@@ -263,9 +264,14 @@
 {
     [super viewWillAppear:animated];
     
-    //Set the navigation bar to translucent
-    if (IS_IOS7){
-        [self.navigationController.navigationBar setTranslucent:YES];
+    self.willLayoutSubviews = true;
+    
+    if (IS_IOS8 || IS_IOS9) {
+        self.edgesForExtendedLayout = UIRectEdgeAll;
+        self.extendedLayoutIncludesOpaqueBars = true;
+        self.automaticallyAdjustsScrollViewInsets = true;
+    }else{
+        self.edgesForExtendedLayout = UIRectEdgeAll;
     }
     
     //Flag to know when the view change automatic to root view
@@ -275,7 +281,7 @@
     self.tabBarController.tabBar.hidden=NO;
     
     AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication] delegate];
-    UserDto *currentUser = app.activeUser;
+    UserDto *currentUser = [ManageUsersDB getActiveUser];
     //ErrorLogin
     app.isErrorLoginShown = NO;
     
@@ -300,18 +306,7 @@
          [currentUser.url isEqualToString:_mUser.url])) {
         //We are changing of user
         //Show the file list in the correct place
-        //Only for iOS 7
-        if (IS_IOS7){
-            if (!IS_IPHONE){
-                [_tableView setContentOffset:CGPointMake(0,-k_navigation_bar_height) animated:animated];
-            } else if (IS_IPHONE && !IS_PORTRAIT) {
-                [_tableView setContentOffset:CGPointMake(0,-(k_navigation_bar_height_in_iphone_landscape + k_status_bar_height)) animated:animated];
-            } else {
-                [_tableView setContentOffset:CGPointMake(0,-(k_status_bar_height + k_navigation_bar_height)) animated:animated];
-            }
-        } else {
-            [_tableView setContentOffset:CGPointMake(0,0) animated:animated];
-        }
+        [_tableView setContentOffset:CGPointMake(0,0) animated:animated];
         
         //We check if the user have root folder at true on the DB
         if([ManageFilesDB isExistRootFolderByUser:app.activeUser]) {
@@ -374,8 +369,38 @@
         path = [path stringByReplacingPercentEscapesUsingEncoding:NSUTF8StringEncoding];
         
         [[AppDelegate sharedOCCommunication] readFile:path onCommunication:[AppDelegate sharedOCCommunication] successRequest:^(NSHTTPURLResponse *response, NSArray *items, NSString *redirectedServer) {
+
+            if (currentUser.idUser == app.activeUser.idUser) {
+                DLog(@"Operation response code: %ld", (long)response.statusCode);
+                
+                BOOL isSamlCredentialsError = NO;
+                
+                //Check the login error in shibboleth
+                if (k_is_sso_active && redirectedServer) {
+                    //Check if there are fragmens of saml in url, in this case there are a credential error
+                    isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:redirectedServer];
+                    if (isSamlCredentialsError) {
+                        [self errorLogin];
+                    }
+                }
+                if(response.statusCode < kOCErrorServerUnauthorized && !isSamlCredentialsError) {
+                    //Pass the items with OCFileDto to FileDto Array
+                    NSMutableArray *directoryList = [UtilsDtos passToFileDtoArrayThisOCFileDtoArray:items];
+                    [self checkEtagBeforeMakeRefreshFolderRequest:directoryList];
+                    
+                } else {
+                    [self endLoading];
+                    [self stopPullRefresh];
+                    _showLoadingAfterChangeUser = NO;
+                }
+            } else {
+                DLog(@"User changed while check a folder");
+                [UtilsFramework deleteAllCookies];
+            }
+        } failureRequest:^(NSHTTPURLResponse *response, NSError *error, NSString *redirectedServer) {
             
-            DLog(@"Operation response code: %ld", (long)response.statusCode);
+            DLog(@"error: %@", error);
+            DLog(@"Operation error: %ld", (long)response.statusCode);
             
             BOOL isSamlCredentialsError = NO;
             
@@ -387,21 +412,9 @@
                     [self errorLogin];
                 }
             }
-            if(response.statusCode < kOCErrorServerUnauthorized && !isSamlCredentialsError) {
-                //Pass the items with OCFileDto to FileDto Array
-                NSMutableArray *directoryList = [UtilsDtos passToFileDtoArrayThisOCFileDtoArray:items];
-                [self checkEtagBeforeMakeRefreshFolderRequest:directoryList];
-                
-            } else {
-                [self endLoading];
-                [self stopPullRefresh];
-                _showLoadingAfterChangeUser = NO;
+            if (!isSamlCredentialsError) {
+                [self manageServerErrors:response.statusCode and:error];
             }
-        } failureRequest:^(NSHTTPURLResponse *response, NSError *error) {
-            
-            DLog(@"error: %@", error);
-            DLog(@"Operation error: %ld", (long)response.statusCode);
-            [self manageServerErrors:response.statusCode and:error];
         
         }];
         
@@ -489,7 +502,9 @@
     //Add loading screen if it's necessary (Used by restoring the loading view after a rotate when the uploading processing)
     if (app.isLoadingVisible==YES) {
         [self initLoading];
+        
     }
+
 }
 
 // Notifies the view controller that its view is about to be removed from a view hierarchy.
@@ -512,7 +527,17 @@
 {
     [super viewDidDisappear:animated];
     
+    self.didLayoutSubviews = true;
+    
     _isEtagRequestNecessary = YES;
+    
+    //Cancel all the get thumbnails in visible cells
+    UITableView *tableView = self.tableView; // Or however you get your table view
+    NSArray *paths = [tableView indexPathsForVisibleRows];
+    
+    for (NSIndexPath *path in paths) {
+        [self cancelGetThumbnailByCell:[tableView cellForRowAtIndexPath:path]];
+    }
 }
 
 - (void)viewDidUnload
@@ -525,25 +550,47 @@
 
 -(void)viewDidLayoutSubviews
 {
+     [super viewDidLayoutSubviews];
     
-    if (IS_IOS8) {
+    if (IS_IOS8 || IS_IOS9) {
         if ([self.tableView respondsToSelector:@selector(setSeparatorInset:)]) {
-            [self.tableView setSeparatorInset:UIEdgeInsetsMake(0, 9, 0, 0)];
+            [self.tableView setSeparatorInset:UIEdgeInsetsMake(0, 10, 0, 0)];
         }
         
         if ([self.tableView respondsToSelector:@selector(setLayoutMargins:)]) {
             [self.tableView setLayoutMargins:UIEdgeInsetsZero];
         }
         
+        
+        CGRect rect = self.navigationController.navigationBar.frame;
+        float y = rect.size.height + rect.origin.y;
+        self.tableView.contentInset = UIEdgeInsetsMake(y,0,0,0);
+        
+        if (self.didLayoutSubviews == false){
+            self.didLayoutSubviews = true;
+            [self viewDidAppear:true];
+        }
     }
+}
+
+- (void)viewWillLayoutSubviews {
+    [super viewWillLayoutSubviews];
+    
+    if (self.willLayoutSubviews == false){
+        self.willLayoutSubviews = true;
+        [self viewWillAppear:true];
+    }
+    
+    
+    
 }
 
 -(void)tableView:(UITableView *)tableView willDisplayCell:(UITableViewCell *)cell forRowAtIndexPath:(NSIndexPath *)indexPath
 {
     
-    if (IS_IOS8) {
+    if (IS_IOS8 || IS_IOS9) {
         if ([self.tableView respondsToSelector:@selector(setSeparatorInset:)]) {
-            [self.tableView setSeparatorInset:UIEdgeInsetsMake(0, 9, 0, 0)];
+            [self.tableView setSeparatorInset:UIEdgeInsetsMake(0, 10, 0, 0)];
         }
         
         if ([self.tableView respondsToSelector:@selector(setLayoutMargins:)]) {
@@ -597,7 +644,11 @@
     }
     
     if (self.plusActionSheet) {
-        [self.plusActionSheet dismissWithClickedButtonIndex:2 animated:NO];
+        [self.plusActionSheet dismissWithClickedButtonIndex:4 animated:NO];
+    }
+    
+    if(self.sortingActionSheet){
+        [self.sortingActionSheet dismissWithClickedButtonIndex:2 animated:NO];
     }
     
     DLog(@"Files view Controller willRotate");
@@ -648,15 +699,15 @@
  */
 -(void)initLoading {
     
-    if (_HUD) {
-        [_HUD removeFromSuperview];
-        _HUD=nil;
+    if (self.HUD) {
+        [self.HUD removeFromSuperview];
+        self.HUD=nil;
     }
     
     if (IS_IPHONE) {
-        _HUD = [[MBProgressHUD alloc]initWithWindow:[UIApplication sharedApplication].keyWindow];
-        _HUD.delegate = self;
-        [self.view.window addSubview:_HUD];
+        self.HUD = [[MBProgressHUD alloc]initWithWindow:[UIApplication sharedApplication].keyWindow];
+        self.HUD.delegate = self;
+        [[UIApplication sharedApplication].keyWindow addSubview:self.HUD];
     } else {
         AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication] delegate];
         
@@ -665,15 +716,15 @@
         [app.splitViewController.view.window addSubview:_HUD];
     }
     
-    _HUD.labelText = NSLocalizedString(@"loading", nil);
+    self.HUD.labelText = NSLocalizedString(@"loading", nil);
     
     if (IS_IPHONE) {
-        _HUD.dimBackground = NO;
+        self.HUD.dimBackground = NO;
     }else {
-        _HUD.dimBackground = NO;
+        self.HUD.dimBackground = NO;
     }
     
-    [_HUD show:YES];
+    [self.HUD show:YES];
     
     self.view.userInteractionEnabled = NO;
     self.navigationController.navigationBar.userInteractionEnabled = NO;
@@ -687,12 +738,14 @@
  */
 - (void)endLoading {
     
-    if (!_isLoadingForNavigate) {
+    if (!self.isLoadingForNavigate) {
         AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication] delegate];
         //Check if the loading should be visible
         if (app.isLoadingVisible==NO) {
             // [MBProgressHUD hideAllHUDsForView:self.navigationController.view animated:YES];
-            [_HUD removeFromSuperview];
+            if (self.HUD) {
+                [self.HUD removeFromSuperview];
+            }
             self.view.userInteractionEnabled = YES;
             self.navigationController.navigationBar.userInteractionEnabled = YES;
             self.tabBarController.tabBar.userInteractionEnabled = YES;
@@ -704,8 +757,8 @@
             [app performSelector:@selector(presentUploadFromOtherApp) withObject:nil afterDelay:0.3];
         }
         
-        if (!_rename.renameAlertView.isVisible) {
-            _rename = nil;
+        if (!self.rename.renameAlertView.isVisible) {
+            self.rename = nil;
         }
     }
 }
@@ -738,6 +791,10 @@
     
     //Add an observer for update the file sync
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(reloadTableFromDataBaseWithFileDto:) name:FavoriteFileIsSync object:nil];
+    
+    
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(reloadTableFileListAfterCapabilitiesUpdated) name:CapabilitiesUpdatedNotification object:nil];
+
 }
 
 
@@ -769,6 +826,26 @@
     }
 }
 
+#pragma mark - Create Text File
+
+/*
+ * This method show a view to enter text for new text file
+ */
+- (void)showCreateTextFile{
+    
+    EditFileViewController *viewController = [[EditFileViewController alloc] initWithFileDto:self.fileIdToShowFiles andModeEditing:NO];
+    OCNavigationController *navController = [[OCNavigationController alloc] initWithRootViewController:viewController];
+    navController.navigationBar.translucent = NO;
+    
+    if (IS_IPHONE)
+    {
+        viewController.hidesBottomBarWhenPushed = YES;
+        [self presentViewController:navController animated:YES completion:nil];
+    } else {
+        navController.modalPresentationStyle = UIModalPresentationFormSheet;
+        [self presentViewController:navController animated:YES completion:nil];
+    }
+}
 
 #pragma mark - Create Folder
 
@@ -854,20 +931,26 @@
                     }
                 }
                 if (!isSamlCredentialsError) {
-                    
-                    //Obtain the path where the folder will be created in the file system
-                    NSString *currentLocalFileToCreateFolder = [NSString stringWithFormat:@"%@/%ld/%@",[UtilsUrls getOwnCloudFilePath],(long)app.activeUser.idUser,[rootPath stringByReplacingPercentEscapesUsingEncoding:NSUTF8StringEncoding]];
-                    
-                    DLog(@"Name of the folder: %@ to create in: %@",name, currentLocalFileToCreateFolder);
-                    
-                    //Create the new folder in the file system
-                    [FileListDBOperations createAFolder:name inLocalFolder:currentLocalFileToCreateFolder];
                     [self refreshTableFromWebDav];
                 }
-            } failureRequest:^(NSHTTPURLResponse *response, NSError *error) {
+            } failureRequest:^(NSHTTPURLResponse *response, NSError *error, NSString *redirectedServer) {
                 DLog(@"error: %@", error);
                 DLog(@"Operation error: %ld", (long)response.statusCode);
-                [self manageServerErrors:response.statusCode and:error];
+                
+                BOOL isSamlCredentialsError = NO;
+                
+                //Check the login error in shibboleth
+                if (k_is_sso_active && redirectedServer) {
+                    //Check if there are fragmens of saml in url, in this case there are a credential error
+                    isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:redirectedServer];
+                    if (isSamlCredentialsError) {
+                        [self errorLogin];
+                    }
+                }
+                if (!isSamlCredentialsError) {
+                    [self manageServerErrors:response.statusCode and:error];
+                }
+ 
             } errorBeforeRequest:^(NSError *error) {
                 if (error.code == OCErrorForbidenCharacters) {
                     [self endLoading];
@@ -905,7 +988,7 @@
 }
 
 
-#pragma mark - UIAlertViewDelegate
+#pragma mark - UIAlertView and UIAlertViewDelegate
 - (void) alertView: (UIAlertView *) alertView willDismissWithButtonIndex: (NSInteger) buttonIndex
 {
     switch (alertView.tag) {
@@ -962,6 +1045,13 @@
     return output;
 }
 
+- (void) showAlertView:(NSString*)string {
+    
+    _alert = nil;
+    _alert = [[UIAlertView alloc] initWithTitle:string message:@"" delegate:nil cancelButtonTitle:NSLocalizedString(@"ok", nil) otherButtonTitles:nil, nil];
+    [_alert show];
+}
+
 #pragma mark - UITextFieldDelegate methods
 
 - (BOOL)textFieldShouldBeginEditing:(UITextField *)textField{
@@ -992,7 +1082,7 @@
     self.albumController = [[ELCAlbumPickerController alloc] initWithNibName: nil bundle: nil];
     self.elcPicker = [[ELCImagePickerController alloc] initWithRootViewController:self.albumController];
     [self.albumController setParent: self.elcPicker];
-	[self.elcPicker setDelegate:self];
+    self.elcPicker.imagePickerDelegate = self;
     
     
     //Info of account and location path   
@@ -1006,14 +1096,8 @@
         folder=appName;
     }
     
-    //TODO: create subclass to include those variables
-    
     self.albumController.currentRemoteFolder=_currentRemoteFolder;
     self.albumController.locationInfo=folder;
-    /*
-    albumController.locationInfo=folder;
-    albumController.accountInfo=app.activeUser.username;
-     */
     
     if (IS_IPHONE) {
         [self presentViewController:self.elcPicker animated:YES completion:nil];
@@ -1021,7 +1105,7 @@
         
         self.elcPicker.modalPresentationStyle = UIModalPresentationFormSheet;
        
-        if (IS_IOS8) {
+        if (IS_IOS8 || IS_IOS9)  {
             [app.detailViewController presentViewController:self.elcPicker animated:YES completion:nil];
         } else {
             [app.splitViewController presentViewController:self.elcPicker animated:YES completion:nil];
@@ -1031,7 +1115,7 @@
 }
 
 /*
- * Method that show the options when the user tap + button
+ * Method that show the options when the user tap ... button
  */
 - (void)showOptions {
     
@@ -1044,7 +1128,7 @@
                             delegate:self
                             cancelButtonTitle:NSLocalizedString(@"cancel", nil)
                             destructiveButtonTitle:nil
-                            otherButtonTitles:NSLocalizedString(@"menu_upload", nil), NSLocalizedString(@"menu_folder", nil), nil];
+                            otherButtonTitles:NSLocalizedString(@"menu_upload", nil), NSLocalizedString(@"menu_folder", nil), NSLocalizedString(@"menu_text_file", nil), NSLocalizedString(@"sort_menu_title", nil), nil];
     
     self.plusActionSheet.actionSheetStyle=UIActionSheetStyleDefault;
     self.plusActionSheet.tag=100;
@@ -1055,7 +1139,7 @@
         
         AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
         
-        if (IS_IOS8) {
+        if (IS_IOS8 || IS_IOS9)  {
             [self.plusActionSheet showInView:app.splitViewController.view];
         } else {
             [self.plusActionSheet showInView:app.detailViewController.view];
@@ -1138,10 +1222,13 @@
 - (void) initPrepareFiles:(NSArray *) info andArrayOFfolders: (NSMutableArray *)  arrayOfRemoteurl{
    
     AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication] delegate];
-    [app.prepareFiles addFilesToUpload:info andRemoteFoldersToUpload: arrayOfRemoteurl];
+    [app.prepareFiles addAssetsToUploadFromArray:info andRemoteFoldersToUpload: arrayOfRemoteurl];
     
     //Init loading to prepare files to upload
-    [self initLoading];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self initLoading];
+    });
+    
     //Set global loading screen global flag to YES (only for iPad)
     app.isLoadingVisible = YES;
 }
@@ -1156,7 +1243,7 @@
     if (IS_IPHONE){
         [self dismissViewControllerAnimated:YES completion:nil];
     } else {
-        if (IS_IOS8) {
+        if (IS_IOS8 || IS_IOS9)  {
             [app.detailViewController dismissViewControllerAnimated:YES completion:nil];
         } else {
             [app.splitViewController dismissViewControllerAnimated:YES completion:nil];
@@ -1175,7 +1262,7 @@
     AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
     
     // If the selected cell is showing the SwipeMenu, we don´t navigate further
-    FileDto *selectedFile = (FileDto *)[[_sortedArray objectAtIndex:indexPath.section]objectAtIndex:indexPath.row];
+    FileDto *selectedFile = (FileDto *)[[[self.sortedArray copy] objectAtIndex:indexPath.section]objectAtIndex:indexPath.row];
     
     selectedFile = [ManageFilesDB getFileDtoByFileName:selectedFile.fileName andFilePath:[UtilsUrls getFilePathOnDBByFilePathOnFileDto:selectedFile.filePath andUser:app.activeUser] andUser:app.activeUser];
     _selectedFileDto = selectedFile;
@@ -1262,6 +1349,11 @@
             fileCell = (CustomCellFileAndDirectory *)[topLevelObjects objectAtIndex:0];
         }
         
+        if (!IS_IPHONE) {
+            fileCell.labelTitle.adjustsFontSizeToFitWidth=YES;
+            fileCell.labelTitle.minimumScaleFactor=0.7;
+        }
+        
         fileCell.indexPath = indexPath;
         
         //Autoresizing width when the iphone is landscape. Not in iPad.
@@ -1269,7 +1361,6 @@
             [fileCell.labelTitle setAutoresizingMask:UIViewAutoresizingFlexibleWidth];
             [fileCell.labelInfoFile setAutoresizingMask:UIViewAutoresizingFlexibleWidth];
         }
-        
         
         FileDto *file = (FileDto *)[[_sortedArray objectAtIndex:indexPath.section]objectAtIndex:indexPath.row];
         
@@ -1281,7 +1372,7 @@
             fileDateString = @"";
         }
         
-        //Add a FileDownloadedIcon.png in the left of cell when the file is in device
+
         if (![file isDirectory]) {
             //Is file
             //Font for file
@@ -1332,7 +1423,12 @@
             fileCell.labelInfoFile.text = [NSString stringWithFormat:@"%@", fileDateString];
         }
         
-        fileCell = [InfoFileUtils getTheStatusIconOntheFile:file onTheCell:fileCell andCurrentFolder:self.fileIdToShowFiles];
+        file = [ManageFilesDB getFileDtoByFileName:file.fileName andFilePath:[UtilsUrls getFilePathOnDBByFilePathOnFileDto:file.filePath andUser:APP_DELEGATE.activeUser] andUser:APP_DELEGATE.activeUser];
+        
+        fileCell = [InfoFileUtils getTheStatusIconOntheFile:file onTheCell:fileCell andCurrentFolder:self.fileIdToShowFiles andIsSonOfFavoriteFolder:self.isCurrentFolderSonOfFavoriteFolder ofUser:APP_DELEGATE.activeUser];
+        
+        //Thumbnail
+        fileCell.thumbnailSessionTask = [InfoFileUtils updateThumbnail:file andUser:APP_DELEGATE.activeUser tableView:tableView cellForRowAtIndexPath:indexPath];
         
         //Custom cell for SWTableViewCell with right swipe options
         fileCell.containingTableView = tableView;
@@ -1356,6 +1452,11 @@
         
         //Set the table footer
         [self setTheLabelOnTheTableFooter];
+        
+        //Put the new files son of favorites to download
+        if (self.isCurrentFolderSonOfFavoriteFolder && !file.isDirectory && (file.isDownload == notDownload || file.isNecessaryUpdate)) {
+            [[AppDelegate sharedManageFavorites] downloadSingleFavoriteFileSonOfFavoriteFolder:file];
+        }
     }
     return cell;
 }
@@ -1363,23 +1464,13 @@
 // Asks the data source to return the number of sections in the table view.
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView
 {
-    //If the _currentDirectoryArray doesn't have object it will have one section
-    NSInteger sections = 1;
-    if ([_currentDirectoryArray count] > 0) {
-        sections = [[[UILocalizedIndexedCollation currentCollation] sectionTitles] count];
-    }
-    return sections;
+    return [SortManager numberOfSectionsInTableViewForUser:APP_DELEGATE.activeUser withFolderList:_currentDirectoryArray];
 }
 
 // Returns the table view managed by the controller object.
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
 {
-    //If the _currentDirectoryArray doesn't have object it will have one row
-    NSInteger rows = 1;
-    if ([_currentDirectoryArray count] > 0) {
-        rows = [[_sortedArray objectAtIndex:section] count];
-    }
-    return rows;
+    return [SortManager numberOfRowsInSection:section forUser:APP_DELEGATE.activeUser  withCurrentDirectoryArray:_currentDirectoryArray andSortedArray:_sortedArray needsExtraEmptyRow:YES];
 }
 
 //Return the row height
@@ -1399,18 +1490,11 @@
 // Returns the table view managed by the controller object.
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section
 {
-    //Only show the section title if there are rows in it
-    BOOL showSection = [[_sortedArray objectAtIndex:section] count] != 0;
-    NSArray *titles = [[UILocalizedIndexedCollation currentCollation] sectionTitles];
-    
-    if(k_minimun_files_to_show_separators > [_currentDirectoryArray count]) {
-        showSection = NO;
-    }
-    return (showSection) ? [titles objectAtIndex:section] : nil;
+   return [SortManager titleForHeaderInTableViewSection:section forUser:APP_DELEGATE.activeUser  withCurrentDirectoryArray:_currentDirectoryArray andSortedArray:_sortedArray];
 }
 
 
-// Asks the data source to return the titles for the sections for a table view.
+// Returns the titles for the sections for a table view.
 - (NSArray *)sectionIndexTitlesForTableView:(UITableView *)tableView
 {
     // The commented part is for the version with searchField
@@ -1420,21 +1504,9 @@
      [array insertObject:UITableViewIndexSearch atIndex:0];
      return [NSArray arrayWithArray:array];*/
     
-    if(k_minimun_files_to_show_separators > [_currentDirectoryArray count]) {
-        return nil;
-    } else {
-        tableView.sectionIndexColor = [UIColor colorOfSectionIndexColorFileList];
-        return [[UILocalizedIndexedCollation currentCollation] sectionIndexTitles];
-    }
-}
+    return [SortManager sectionIndexTitlesForTableView:tableView forUser:APP_DELEGATE.activeUser  withCurrentDirectoryArray:_currentDirectoryArray];
+    
 
-// Change the color of the header section on the table
-- (void)tableView:(UITableView *)tableView willDisplayHeaderView:(UIView *)view forSection:(NSInteger)section
-{
-    //Only on iOS7 include transparency on the header section
-    if (IS_IOS7) {
-        view.tintColor = [UIColor colorOfHeaderTableSectionFileList];
-    }
 }
 
 
@@ -1456,6 +1528,26 @@
     return [[UILocalizedIndexedCollation currentCollation] sectionForSectionIndexTitleAtIndex:index];
 }
 
+- (void) tableView:(UITableView *)tableView didEndDisplayingCell:(UITableViewCell *)cell forRowAtIndexPath:(NSIndexPath *)indexPath {
+    [self cancelGetThumbnailByCell:cell];
+}
+
+- (void) cancelGetThumbnailByCell:(UITableViewCell *) cell {
+    @try {
+        CustomCellFileAndDirectory *customCell = (CustomCellFileAndDirectory *) cell;
+        
+        if ([customCell isKindOfClass:[CustomCellFileAndDirectory class]] && customCell.thumbnailSessionTask) {
+            DLog(@"Cancel thumbnailOperation");
+            [customCell.thumbnailSessionTask cancel];
+        }
+    }
+    @catch (NSException *exception) {
+        DLog(@"Exception: %@", exception);
+    }
+    @finally {
+    }
+}
+
 ///-----------------------------------
 /// @name setTheLabelOnTheTableFooter
 ///-----------------------------------
@@ -1467,8 +1559,10 @@
     [self obtainTheQuantityOfFilesAndFolders];
     
     //Set the text of the footer section
-    UIView *footerView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, k_footer_label_width, 40)];
-    UILabel *footerLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, k_footer_label_width, 40)];
+    UIView *footerView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, self.tableView.frame.size.width, 40 + self.tabBarController.tabBar.frame.size.height)];
+    footerView.backgroundColor = [UIColor clearColor];
+    
+    UILabel *footerLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, self.tableView.frame.size.width, 40)];
     
     UIFont *appFont = [UIFont fontWithName:@"HelveticaNeue" size:16];
     
@@ -1561,24 +1655,14 @@
     } else {
         self.navigationItem.backBarButtonItem = nil;
 
-        //Depend of the iOS version 
-        if (IS_IOS7) {
-            //iOS 7 - only the arrow
-            self.navigationItem.backBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"" style:UIBarButtonItemStylePlain target:nil action:nil];
-        } else {
-            //iOS 6 - back button
-            self.navigationItem.backBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:NSLocalizedString(@"back", nil) style:UIBarButtonItemStylePlain target:nil action:nil];
-        }
+        self.navigationItem.backBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:NSLocalizedString(@"back", nil) style:UIBarButtonItemStylePlain target:nil action:nil];
+        
         FilePreviewViewController *viewController = [[FilePreviewViewController alloc]initWithNibName:@"FilePreviewViewController" selectedFile:selectedFile];
         
         //Hide tabbar
         viewController.hidesBottomBarWhenPushed = YES;
         viewController.sortedArray=_sortedArray;
 
-        //Set the navigation bar to not translucent
-        if (IS_IOS7) {
-            [self.navigationController.navigationBar setTranslucent:NO];
-        }
         [self.navigationController pushViewController:viewController animated:YES];
     }
 }
@@ -1595,6 +1679,13 @@
     FilesViewController *filesViewController = [[FilesViewController alloc] initWithNibName:@"FilesViewController" onFolder:url andFileId:fileIdToShowFiles andCurrentLocalFolder:_currentLocalFolder];
     
     filesViewController.isEtagRequestNecessary = YES;
+    
+    //Set if the selected folder is favorite or if we are in a son of a favorite one
+    if (self.isCurrentFolderSonOfFavoriteFolder) {
+        filesViewController.isCurrentFolderSonOfFavoriteFolder = self.isCurrentFolderSonOfFavoriteFolder;
+    } else {
+        filesViewController.isCurrentFolderSonOfFavoriteFolder = self.selectedFileDto.isFavorite;
+    }
     
     [[self navigationController] pushViewController:filesViewController animated:YES];
 }
@@ -1624,7 +1715,7 @@
         _selectedFileDto = selectedFile;
         [_tableView deselectRowAtIndexPath:[_tableView indexPathForSelectedRow] animated:YES];
         
-        if ([_mCheckAccessToServer isNetworkIsReachable]){
+        if ([[CheckAccessToServer sharedManager]isNetworkIsReachable]){
             [self goToFolderWithoutCheck];
         } else {
             
@@ -1636,10 +1727,6 @@
     } else {
         [self navigateToUrl:_nextRemoteFolder andFileId:selectedFile.idFile];
     }
-    
-    //Launch the method to sync the favorites files with specific path
-    NSNumber *folderId = [NSNumber numberWithInteger:selectedFile.idFile];
-    [self performSelectorInBackground:@selector(syncFavoritesOfFolderId:) withObject:folderId];
 }
 
 /*
@@ -1680,6 +1767,7 @@
             //Check if there are fragmens of saml in url, in this case there are a credential error
             isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:redirectedServer];
             if (isSamlCredentialsError) {
+                self.isLoadingForNavigate = NO;
                 [self errorLogin];
             }
         }
@@ -1688,13 +1776,27 @@
            NSMutableArray *directoryList = [UtilsDtos passToFileDtoArrayThisOCFileDtoArray:items];
            [self prepareForNavigationWithData:directoryList];
         }
-    } failureRequest:^(NSHTTPURLResponse *response, NSError *error, NSString *token) {
+    } failureRequest:^(NSHTTPURLResponse *response, NSError *error, NSString *token, NSString *redirectedServer) {
         
         _isLoadingForNavigate = NO;
         
         DLog(@"error: %@", error);
         DLog(@"Operation error: %ld", (long)response.statusCode);
-        [self manageServerErrors:response.statusCode and:error];
+        
+        BOOL isSamlCredentialsError = NO;
+        
+        //Check the login error in shibboleth
+        if (k_is_sso_active && redirectedServer) {
+            //Check if there are fragmens of saml in url, in this case there are a credential error
+            isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:redirectedServer];
+            if (isSamlCredentialsError) {
+                [self errorLogin];
+            }
+        }
+        if (!isSamlCredentialsError) {
+            [self manageServerErrors:response.statusCode and:error];
+        }
+        
     }];
 }
 
@@ -1729,7 +1831,7 @@
    // DLog(@"self.fileIdToShowFiles: %d", [self.currentDirectoryArray count]);
     
     //Sorted the files array
-    _sortedArray = [self partitionObjects: _currentDirectoryArray collationStringSelector:@selector(fileName)];
+    _sortedArray = [SortManager getSortedArrayFromCurrentDirectoryArray:_currentDirectoryArray forUser:APP_DELEGATE.activeUser];
     
     //update gallery array
     [self updateArrayImagesInGallery];
@@ -1738,12 +1840,22 @@
     [self setTheLabelOnTheTableFooter];
         
     //Reload data in the table
-    [self.tableView performSelectorOnMainThread:@selector(reloadData) withObject:nil waitUntilDone:YES];
+    [self reloadTableFileList];
     
     //TODO: Remove this to prevent duplicate files
     /*if([_currentDirectoryArray count] != 0) {
         [self endLoading];
     }*/
+}
+
+
+-(void)reloadTableFileListAfterCapabilitiesUpdated {
+    _currentDirectoryArray = [ManageFilesDB getFilesByFileIdForActiveUser:_fileIdToShowFiles.idFile];
+    _sortedArray = [SortManager getSortedArrayFromCurrentDirectoryArray:_currentDirectoryArray forUser:APP_DELEGATE.activeUser];
+    [self reloadTableFileList];
+}
+-(void)reloadTableFileList{
+    [self.tableView performSelectorOnMainThread:@selector(reloadData) withObject:nil waitUntilDone:YES];
 }
 
 /*
@@ -1759,7 +1871,7 @@
     // DLog(@"self.fileIdToShowFiles: %d", [self.currentDirectoryArray count]);
     
     //Sorted the files array
-    _sortedArray = [self partitionObjects: _currentDirectoryArray collationStringSelector:@selector(fileName)];
+    _sortedArray = [SortManager getSortedArrayFromCurrentDirectoryArray:_currentDirectoryArray forUser:APP_DELEGATE.activeUser];
     
     //update gallery array
     [self updateArrayImagesInGallery];
@@ -1804,6 +1916,7 @@
     refresh.attributedTitle = nil;
     
     [self performSelector:@selector(refreshTableFromWebDav) withObject:nil];
+    //[self performSelectorInBackground:@selector(syncFavoritesByFolder:) withObject:self.fileIdToShowFiles];
 }
 
 ///-----------------------------------
@@ -1815,7 +1928,6 @@
  * terminate the pull refresh animation
  */
 - (void)stopPullRefresh{
-    
     //_refreshControl.attributedTitle = [[NSAttributedString alloc] initWithString: NSLocalizedString(@"pull_down_refresh", nil)];
     [_refreshControl endRefreshing];
 }
@@ -1824,16 +1936,13 @@
  * Method to sync favorites of the current path. 
  * Usually we call this method in a background mode
  */
-- (void) syncFavoritesOfFolderId:(NSNumber*)idFolder{
+- (void) syncFavoritesByFolder:(FileDto *) folder {
     
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0), ^{
-        //Do operations in background thread
-        NSInteger folder = [idFolder integerValue];
-        
         //Launch the method to sync the favorites files with specific path
         AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
-        [app.manageFavorites syncFavoritesOfFolder:folder withUser:app.activeUser.idUser];
-        
+        [[AppDelegate sharedManageFavorites] syncFavoritesOfFolder:folder withUser:app.activeUser.idUser];
+    
     });
     
 }
@@ -1847,11 +1956,9 @@
     [self performSelector:@selector(sendRequestToReloadTableView) withObject:nil];
     
     //Refresh the shared data
-    [self performSelector:@selector(refreshSharedPath) withObject:nil];
+    //[self performSelector:@selector(refreshSharedPath) withObject:nil afterDelay:1.0];
     
-    //Pass NSInteger to NSNumber in order to pass an object with performselectorinbackground
-    NSNumber *folderId = [NSNumber numberWithInteger:self.currentFileShowFilesOnTheServerToUpdateTheLocalFile.idFile];
-    [self performSelectorInBackground:@selector(syncFavoritesOfFolderId:) withObject:folderId];
+    [self performSelectorInBackground:@selector(syncFavoritesByFolder:) withObject:self.fileIdToShowFiles];
 }
 
 /*
@@ -1884,7 +1991,37 @@
     
      [[AppDelegate sharedOCCommunication] readFolder:path withUserSessionToken:app.userSessionCurrentToken onCommunication:[AppDelegate sharedOCCommunication] successRequest:^(NSHTTPURLResponse *response, NSArray *items, NSString *redirectedServer, NSString *token) {
          
-        DLog(@"Operation response code: %ld", (long)response.statusCode);
+         DLog(@"Operation response code: %ld", (long)response.statusCode);
+         BOOL isSamlCredentialsError = NO;
+         
+         //Check the login error in shibboleth
+         if (k_is_sso_active && redirectedServer) {
+             //Check if there are fragmens of saml in url, in this case there are a credential error
+             isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:redirectedServer];
+             if (isSamlCredentialsError) {
+                 [self errorLogin];
+             }
+         }
+         
+         if(response.statusCode != kOCErrorServerUnauthorized && !isSamlCredentialsError && [app.userSessionCurrentToken isEqualToString:token]) {
+             
+             //Pass the items with OCFileDto to FileDto Array
+             NSMutableArray *directoryList = [UtilsDtos passToFileDtoArrayThisOCFileDtoArray:items];
+             
+             //Send the data to DB and refresh the table
+             [self deleteOldDataFromDBBeforeRefresh:directoryList];
+         } else {
+             [self stopPullRefresh];
+             _showLoadingAfterChangeUser = NO;
+         }
+         
+         [self performSelector:@selector(refreshSharedPath) withObject:nil];
+
+    } failureRequest:^(NSHTTPURLResponse *response, NSError *error, NSString *token, NSString *redirectedServer) {
+        
+        DLog(@"error: %@", error);
+        DLog(@"Operation error: %ld", (long)response.statusCode);
+        
         BOOL isSamlCredentialsError = NO;
         
         //Check the login error in shibboleth
@@ -1895,33 +2032,54 @@
                 [self errorLogin];
             }
         }
-        
-        if(response.statusCode != kOCErrorServerUnauthorized && !isSamlCredentialsError && [app.userSessionCurrentToken isEqualToString:token]) {
-            
-            //Pass the items with OCFileDto to FileDto Array
-            NSMutableArray *directoryList = [UtilsDtos passToFileDtoArrayThisOCFileDtoArray:items];
-            
-            //Send the data to DB and refresh the table
-            [self deleteOldDataFromDBBeforeRefresh:directoryList];
-        } else {
-            [self stopPullRefresh];
-            _showLoadingAfterChangeUser = NO;
+        if (!isSamlCredentialsError) {
+            [self manageServerErrors:response.statusCode and:error];
         }
-
-    } failureRequest:^(NSHTTPURLResponse *response, NSError *error, NSString *token) {
-        
-        DLog(@"error: %@", error);
-        DLog(@"Operation error: %ld", (long)response.statusCode);
-        [self manageServerErrors:response.statusCode and:error];
         
     }];
+}
+
+- (void) reloadCellByFile:(FileDto *) file {
+   
+    NSIndexPath* indexPath;
+    BOOL isFound = NO;
+    
+    for (NSInteger i = 0; i < self.sortedArray.count; i++) {
+        
+        NSMutableArray *currentListOfFilesOnSection = [[self.sortedArray objectAtIndex:i] mutableCopy];
+        
+        for (NSInteger j = 0 ; j < currentListOfFilesOnSection.count ; j++) {
+            FileDto *current = [currentListOfFilesOnSection objectAtIndex:j];
+            
+            if ([current.localFolder isEqualToString: file.localFolder]) {
+                indexPath = [NSIndexPath indexPathForRow:j inSection:i];
+                [currentListOfFilesOnSection replaceObjectAtIndex:j withObject:file];
+                [self.sortedArray replaceObjectAtIndex:i withObject:currentListOfFilesOnSection.copy];
+                isFound = YES;
+                break;
+            }
+        }
+        
+        if (isFound) {
+            break;
+        }
+    }
+    
+    NSArray* indexArray = [NSArray arrayWithObjects:indexPath, nil];
+    
+    dispatch_queue_t mainThreadQueue = dispatch_get_main_queue();
+    dispatch_async(mainThreadQueue, ^{
+        [self.tableView beginUpdates];
+        [self.tableView reloadRowsAtIndexPaths:indexArray withRowAnimation:UITableViewRowAnimationNone];
+        [self.tableView endUpdates];
+    });
 }
 
 /*
  * Method used for quit the flag about the refresh
  * and the system can be a new refresh action
  */
-- (void)disableRefreshInProgress{
+- (void)disableRefreshInProgress {
     
     AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication] delegate];
     app.isRefreshInProgress=NO;
@@ -1977,7 +2135,7 @@
         [FileListDBOperations createAllFoldersByArrayOfFilesDto:_currentDirectoryArray andLocalFolder:_currentLocalFolder];
         
         //Sorted the files array
-        _sortedArray = [self partitionObjects: _currentDirectoryArray collationStringSelector:@selector(fileName)];
+        _sortedArray = [SortManager getSortedArrayFromCurrentDirectoryArray:_currentDirectoryArray forUser:APP_DELEGATE.activeUser];
         
         //update gallery array
         [self updateArrayImagesInGallery];
@@ -2085,7 +2243,7 @@
                     });
                 });
             }
-        } failureRequest:^(NSHTTPURLResponse *response, NSError *error) {
+        } failureRequest:^(NSHTTPURLResponse *response, NSError *error, NSString *redirectedServer) {
             
             DLog(@"error: %@", error);
             DLog(@"Operation error: %ld", (long)response.statusCode);
@@ -2097,48 +2255,51 @@
     }
 }
 
-#pragma mark - Order methods
+#pragma mark - Sorting methods
 
 /*
- * Method that sorts alphabetically array by selector
- *@array -> array of sections and rows of tableview
+ * This method shows an action sheet to sort the files and folders list
  */
-- (NSArray *)partitionObjects:(NSArray *)array collationStringSelector:(SEL)selector {
-    UILocalizedIndexedCollation *collation = [UILocalizedIndexedCollation currentCollation];
+- (void)showSortingOptions{
+    NSString * sortByTitle = NSLocalizedString(@"sort_menu_title", nil);
     
-    NSInteger sectionCount = [[collation sectionTitles] count]; //section count is take from sectionTitles and not sectionIndexTitles
-    NSMutableArray *unsortedSections = [NSMutableArray arrayWithCapacity:sectionCount];
+    if (self.sortingActionSheet) {
+        self.sortingActionSheet = nil;
+    }
     
-    //create an array to hold the data for each section
-    for(int i = 0; i < sectionCount; i++) {
-        [unsortedSections addObject:[NSMutableArray array]];
-    }
-    //put each object into a section
-    for (id object in array) {
-        NSInteger index = [collation sectionForObject:object collationStringSelector:selector];
-        [[unsortedSections objectAtIndex:index] addObject:object];
-    }
-    NSMutableArray *sections = [NSMutableArray arrayWithCapacity:sectionCount];
+    self.sortingActionSheet = [[UIActionSheet alloc]
+                               initWithTitle:sortByTitle
+                               delegate:self
+                               cancelButtonTitle:NSLocalizedString(@"cancel", nil)
+                               destructiveButtonTitle:nil
+                               otherButtonTitles:NSLocalizedString(@"sort_menu_by_name_option", nil), NSLocalizedString(@"sort_menu_by_modification_date_option", nil), nil];
     
-    //sort each section
-    for (NSMutableArray *section in unsortedSections) {
-        [sections addObject:[collation sortedArrayFromArray:section collationStringSelector:selector]];
+    self.sortingActionSheet.actionSheetStyle=UIActionSheetStyleDefault;
+    self.sortingActionSheet.tag=300;
+    
+    if (IS_IPHONE) {
+        [self.sortingActionSheet showInView:self.tabBarController.view];
+    } else {
+        
+        AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
+        
+        if (IS_IOS8 || IS_IOS9)  {
+            [self.sortingActionSheet showInView:app.splitViewController.view];
+        } else {
+            [self.sortingActionSheet showInView:app.detailViewController.view];
+        }
     }
-    return sections;
 }
 
 
 /*
- * This method is for show alert view in main thread.
- * @string -> string wiht the message of the alert view.
+ * This method stores in the DB the sorting option selected by the user
  */
-
-- (void) showAlertView:(NSString*)string {
-    
-    _alert = nil;
-    _alert = [[UIAlertView alloc] initWithTitle:string message:@"" delegate:nil cancelButtonTitle:NSLocalizedString(@"ok", nil) otherButtonTitles:nil, nil];
-    [_alert show];
+- (void) updateActiveUserSortingChoiceTo: (enumSortingType)sortingChoice{
+    APP_DELEGATE.activeUser.sortingType = sortingChoice;
+    [ManageUsersDB updateSortingWayForUserDto:APP_DELEGATE.activeUser];
 }
+
 
 #pragma mark - UIActionSheetDelegate
 
@@ -2152,6 +2313,12 @@
                 break;
             case 1:
                 [self showCreateFolder];
+                break;
+            case 2:
+                [self showCreateTextFile];
+                break;
+            case 3:
+                [self showSortingOptions];
                 break;
             default:
                 break;
@@ -2168,6 +2335,22 @@
                 case 1:
                     [self didSelectMoveOption];
                     break;
+                case 2:
+                    [self performSelectorInBackground:@selector(didSelectDownloadFolder) withObject:nil];
+                    break;
+                case 3:
+                    
+                    if (self.isCurrentFolderSonOfFavoriteFolder) {
+                        [self showAlertView:NSLocalizedString(@"parent_folder_is_available_offline_folder_child", nil)];
+                    } else {
+                        if (self.selectedFileDto.isFavorite) {
+                            [self didSelectCancelFavoriteFolder];
+                        } else {
+                            [self didSelectFavoriteFolder];
+                        }
+                    }
+                    
+                    break;
                 default:
                     break;
             }
@@ -2175,7 +2358,7 @@
             switch (buttonIndex) {
                 case 0:
                     
-                    if (_selectedFileDto.isDownload || [_mCheckAccessToServer isNetworkIsReachable]){
+                    if (_selectedFileDto.isDownload || [[CheckAccessToServer sharedManager] isNetworkIsReachable]){
                         [self didSelectOpenWithOptionAndFile:_selectedFileDto];
                     } else {
                         _alert = nil;
@@ -2190,11 +2373,58 @@
                     [self didSelectMoveOption];
                     break;
                 case 3:
-                    [self didSelectFavoriteOption];
+                    if (self.isCurrentFolderSonOfFavoriteFolder) {
+                        [self showAlertView:NSLocalizedString(@"parent_folder_is_available_offline_file_child", nil)];
+                    } else {
+                        [self didSelectFavoriteOption];
+                    }
                     break;
                 default:
                     break;
             }
+        }
+    }
+    
+    if (actionSheet.tag==210) {
+        switch (buttonIndex) {
+            case 0:
+                [self didSelectCancelDownloadFolder];
+                break;
+            default:
+                break;
+        }
+    }
+    
+    if (actionSheet.tag==220) {
+        switch (buttonIndex) {
+            case 0:
+                [self didSelectCancelFavoriteFolder];
+                break;
+            default:
+                break;
+        }
+    }
+    
+    //Sorting options
+    if (actionSheet.tag==300) {
+        enumSortingType storedSorting = APP_DELEGATE.activeUser.sortingType;
+        switch (buttonIndex) {
+            case 0:
+                if(storedSorting != sortByName){
+                    [self updateActiveUserSortingChoiceTo:sortByName];
+                    _sortedArray = [SortManager getSortedArrayFromCurrentDirectoryArray:_currentDirectoryArray forUser:APP_DELEGATE.activeUser];
+                    [self reloadTableFileList];
+                }
+                break;
+            case 1:
+                if(storedSorting != sortByModificationDate){
+                    [self updateActiveUserSortingChoiceTo:sortByModificationDate];
+                    _sortedArray = [SortManager getSortedArrayFromCurrentDirectoryArray:_currentDirectoryArray forUser:APP_DELEGATE.activeUser];
+                    [self reloadTableFileList];
+                }
+                break;
+            default:
+                break;
         }
     }
 }
@@ -2227,7 +2457,7 @@
  */
 - (void)didSelectOpenWithOption{
     
-    if (_selectedFileDto.isDownload || [_mCheckAccessToServer isNetworkIsReachable]){
+    if (_selectedFileDto.isDownload || [[CheckAccessToServer sharedManager] isNetworkIsReachable]){
         [self didSelectOpenWithOptionAndFile:_selectedFileDto];
     } else {
         _alert = nil;
@@ -2274,13 +2504,7 @@
         
         _downloadView.delegate=self;
         
-        //Only iOS6
-        if (IS_IOS7 || IS_IOS8) {
-            _downloadView.view.frame = _tableView.frame;
-            
-        } else {
-            _downloadView.view.frame = self.view.window.frame;
-        }
+         _downloadView.view.frame = _tableView.frame;
         
         _downloadView.view.opaque=YES;
         _downloadView.view.backgroundColor=[[UIColor blackColor] colorWithAlphaComponent:0.5f];
@@ -2371,7 +2595,7 @@
         self.alert = [[UIAlertView alloc]initWithTitle:NSLocalizedString(@"file_is_downloading", nil) message:@"" delegate:nil cancelButtonTitle:NSLocalizedString(@"ok", nil) otherButtonTitles:nil];
         [self.alert show];
         
-    } else if ([self.selectedFileDto isDirectory]&& [DownloadUtils thereAreDownloadingFilesOnTheFolder: self.selectedFileDto]) {
+    } else if (([self.selectedFileDto isDirectory] && [DownloadUtils thereAreDownloadingFilesOnTheFolder: self.selectedFileDto]) || ([self.selectedFileDto isDirectory] && [[AppDelegate sharedSyncFolderManager].forestOfFilesAndFoldersToBeDownloaded isFolderPendingToBeDownload:self.selectedFileDto])) {
         //if the user are downloading files from the server
         self.alert = nil;
         self.alert = [[UIAlertView alloc]initWithTitle:NSLocalizedString(@"msg_while_downloads", nil) message:@"" delegate:nil cancelButtonTitle:NSLocalizedString(@"ok", nil) otherButtonTitles:nil];
@@ -2441,7 +2665,7 @@
 #pragma mark - Move option
 
 /*
- * Method called when the user select de move option
+ * Method called when the user select the move option
  */
 - (void)didSelectMoveOption {
     AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication] delegate];
@@ -2498,7 +2722,7 @@
             self.selectFolderNavigation.modalTransitionStyle=UIModalTransitionStyleCoverVertical;
             self.selectFolderNavigation.modalPresentationStyle = UIModalPresentationFormSheet;
             
-            if (IS_IOS8) {
+            if (IS_IOS8 || IS_IOS9) {
                 //Remove all the views in the main screen for the iOS8 bug
                 if (self.moreActionSheet) {
                     [self.moreActionSheet dismissWithClickedButtonIndex:0 animated:YES];
@@ -2508,6 +2732,87 @@
         }
         //Hide preview (only in iPad)
         [self hidePreviewOniPad];
+    }
+}
+
+#pragma mark - Download Folder
+
+/*
+ * Method called when the user select the Download Folder
+ */
+- (void) didSelectDownloadFolder {
+    DLog(@"Download Folder");
+    
+    AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication] delegate];
+    
+    //Update fileDto
+    self.selectedFileDto = [ManageFilesDB getFileDtoByFileName:self.selectedFileDto.fileName andFilePath:[UtilsUrls getFilePathOnDBByFilePathOnFileDto:self.selectedFileDto.filePath andUser:app.activeUser] andUser:app.activeUser];
+    
+    [[AppDelegate sharedSyncFolderManager] addFolderToBeDownloaded:self.selectedFileDto];
+
+    [self reloadTableFileList];
+}
+
+/*
+ *
+ */
+
+- (void) didSelectCancelDownloadFolder {
+    DLog(@"Cancel Download Folder");
+    
+    AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication] delegate];
+    
+    //Update fileDto
+    self.selectedFileDto = [ManageFilesDB getFileDtoByFileName:self.selectedFileDto.fileName andFilePath:[UtilsUrls getFilePathOnDBByFilePathOnFileDto:self.selectedFileDto.filePath andUser:app.activeUser] andUser:app.activeUser];
+    
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        [[AppDelegate sharedSyncFolderManager] cancelDownloadsByFolder:self.selectedFileDto];
+    });
+
+}
+
+- (void) didSelectFavoriteFolder {
+    
+    AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication] delegate];
+    
+    //Update fileDto
+    self.selectedFileDto = [ManageFilesDB getFileDtoByFileName:self.selectedFileDto.fileName andFilePath:[UtilsUrls getFilePathOnDBByFilePathOnFileDto:self.selectedFileDto.filePath andUser:app.activeUser] andUser:app.activeUser];
+    self.selectedFileDto.isFavorite = YES;
+    
+    [ManageFilesDB updateTheFileID:self.selectedFileDto.idFile asFavorite:self.selectedFileDto.isFavorite];
+    [[AppDelegate sharedManageFavorites] setAllFilesAndFoldersAsNoFavoriteBehindFolder:self.selectedFileDto];
+    
+    [self didSelectDownloadFolder];
+    
+    if (!IS_IPHONE) {
+        AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
+        
+        if (app.detailViewController.file) {
+            [app.detailViewController updateFavoriteIconWhenAFolderIsSelectedFavorite];
+        }
+    }
+}
+
+- (void) didSelectCancelFavoriteFolder {
+    DLog(@"Cancel Download Folder");
+    
+    AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication] delegate];
+    
+    //Update fileDto
+    self.selectedFileDto = [ManageFilesDB getFileDtoByFileName:self.selectedFileDto.fileName andFilePath:[UtilsUrls getFilePathOnDBByFilePathOnFileDto:self.selectedFileDto.filePath andUser:app.activeUser] andUser:app.activeUser];
+    self.selectedFileDto.isFavorite = NO;
+    
+    [ManageFilesDB updateTheFileID:self.selectedFileDto.idFile asFavorite:self.selectedFileDto.isFavorite];
+    
+    [self didSelectCancelDownloadFolder];
+    [app reloadCellByFile:self.selectedFileDto];
+    
+    if (!IS_IPHONE) {
+        AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
+        
+        if (app.detailViewController.file) {
+            [app.detailViewController updateFavoriteIconWhenAFolderIsSelectedFavorite];
+        }
     }
 }
 
@@ -2855,7 +3160,7 @@
 /*
  * Method called when receive a fail from server side
  * @errorCodeFromServer -> WebDav Server Error of NSURLResponse
- * @error -> NSError of NSURLConnection
+ * @error -> NSError of NSURLSession
  */
 
 - (void)manageServerErrors: (NSInteger)errorCodeFromServer and:(NSError *)error {
@@ -2943,6 +3248,7 @@
     }
 }
 
+#pragma mark - CheckAccessToServer
 -(void)connectionToTheServer:(BOOL)isConnection {
     if(isConnection) {
         DLog(@"Ok, we have connection to the server");
@@ -2956,7 +3262,8 @@
 }
 
 -(void)repeatTheCheckToTheServer {
-    //ok, certificate accepted
+    DLog(@"Certificate accepted by the user");
+    [[CheckAccessToServer sharedManager]isConnectionToTheServerByUrl:APP_DELEGATE.activeUser.url];
 }
 
 -(void)badCertificateNoAcceptedByUser {
@@ -2996,14 +3303,13 @@
     //Share gray button
     NSMutableArray *rightUtilityButtons = [NSMutableArray new];
     
-    BOOL areTwoButtonsInTheSwipe = NO;
-    
-    if (!k_hide_share_options) {
-        //Three buttons
-        areTwoButtonsInTheSwipe = NO;
-    }else{
+    BOOL areTwoButtonsInTheSwipe = false;
+    if ( (k_hide_share_options) || (APP_DELEGATE.activeUser.hasCapabilitiesSupport == serverFunctionalitySupported && APP_DELEGATE.activeUser.capabilitiesDto && !APP_DELEGATE.activeUser.capabilitiesDto.isFilesSharingAPIEnabled) ) {
         //Two buttons
-        areTwoButtonsInTheSwipe = YES;
+        areTwoButtonsInTheSwipe = true;
+    }else{
+        //Three buttons
+        areTwoButtonsInTheSwipe = false;
     }
     
     UIColor *normalColor = [UIColor colorWithRed:0.78f green:0.78f blue:0.8f alpha:1.0f];
@@ -3055,10 +3361,6 @@
     
     [cell hideUtilityButtonsAnimated:YES];
     
-     if (!k_hide_share_options) {
-         
-     }
-    
     switch (index) {
         case 0:
         {
@@ -3068,24 +3370,26 @@
         }
         case 1:
         {
-            if (!k_hide_share_options) {
-                DLog(@"Click on index 1 - Share");
-                [self didSelectShareLinkOption];
-                break;
-            }else{
+            if ((k_hide_share_options) || (APP_DELEGATE.activeUser.hasCapabilitiesSupport == serverFunctionalitySupported && APP_DELEGATE.activeUser.capabilitiesDto && !APP_DELEGATE.activeUser.capabilitiesDto.isFilesSharingAPIEnabled)) {
                 DLog(@"Click on index 2 - Delete");
                 [self didSelectDeleteOption];
+                break;
+            }else{
+                DLog(@"Click on index 1 - Share");
+                [self didSelectShareLinkOption];
                 break;
             }
 
         }
         case 2:
         {
-            if (!k_hide_share_options) {
+            if ((k_hide_share_options) || (APP_DELEGATE.activeUser.hasCapabilitiesSupport == serverFunctionalitySupported && APP_DELEGATE.activeUser.capabilitiesDto && !APP_DELEGATE.activeUser.capabilitiesDto.isFilesSharingAPIEnabled)) {
+            }else{
                 DLog(@"Click on index 2 - Delete");
                 [self didSelectDeleteOption];
                 break;
             }
+            
         }
         default:
             break;
@@ -3143,18 +3447,41 @@
     
     NSString *title = [self.selectedFileDto.fileName stringByReplacingPercentEscapesUsingEncoding:NSUTF8StringEncoding];
     
-    if(_selectedFileDto.isDirectory) {
+    if(self.selectedFileDto.isDirectory) {
         
         title = [title substringToIndex:[title length]-1];
         
-        self.moreActionSheet = [[UIActionSheet alloc] initWithTitle:title delegate:self cancelButtonTitle:NSLocalizedString(@"cancel", nil) destructiveButtonTitle:nil otherButtonTitles:NSLocalizedString(@"rename_long_press", nil), NSLocalizedString(@"move_long_press", nil), nil];
-        self.moreActionSheet.tag=200;
+        if ([[AppDelegate sharedSyncFolderManager].forestOfFilesAndFoldersToBeDownloaded isFolderPendingToBeDownload:self.selectedFileDto]) {
+            if (self.isCurrentFolderSonOfFavoriteFolder) {
+                NSString *msg = NSLocalizedString(@"msg_while_downloads", nil);
+                _alert = [[UIAlertView alloc] initWithTitle:msg message:@"" delegate:nil cancelButtonTitle:NSLocalizedString(@"ok", nil) otherButtonTitles:nil, nil];
+                [_alert show];
+            } else if (self.selectedFileDto.isFavorite) {
+                self.moreActionSheet = [[UIActionSheet alloc] initWithTitle:title delegate:self cancelButtonTitle:NSLocalizedString(@"cancel", nil) destructiveButtonTitle:nil otherButtonTitles:NSLocalizedString(@"not_available_offline", nil), nil];
+                self.moreActionSheet.tag=220;
+            } else {
+                self.moreActionSheet = [[UIActionSheet alloc] initWithTitle:title delegate:self cancelButtonTitle:NSLocalizedString(@"cancel", nil) destructiveButtonTitle:nil otherButtonTitles:NSLocalizedString(@"cancel_download", nil), nil];
+                self.moreActionSheet.tag=210;
+            }
+        } else {
+            
+            NSString *favoriteOrUnfavoriteString = @"";
+            
+            if (_selectedFileDto.isFavorite && !self.isCurrentFolderSonOfFavoriteFolder) {
+                favoriteOrUnfavoriteString = NSLocalizedString(@"not_available_offline", nil);
+            } else {
+                favoriteOrUnfavoriteString = NSLocalizedString(@"available_offline", nil);
+            }
+            
+            self.moreActionSheet = [[UIActionSheet alloc] initWithTitle:title delegate:self cancelButtonTitle:NSLocalizedString(@"cancel", nil) destructiveButtonTitle:nil otherButtonTitles:NSLocalizedString(@"rename_long_press", nil), NSLocalizedString(@"move_long_press", nil), NSLocalizedString(@"download_folder", nil), favoriteOrUnfavoriteString, nil];
+            self.moreActionSheet.tag=200;
+        }
         
         if (IS_IPHONE) {
             [self.moreActionSheet showInView:self.tabBarController.view];
         }else {
             AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
-            if (IS_IOS8) {
+            if (IS_IOS8 || IS_IOS9) {
                 [self.moreActionSheet showInView:app.splitViewController.view];
             } else {
                 [self.moreActionSheet showInView:app.detailViewController.view];
@@ -3164,10 +3491,10 @@
         
         NSString *favoriteOrUnfavoriteString = @"";
         
-        if (_selectedFileDto.isFavorite) {
-            favoriteOrUnfavoriteString = NSLocalizedString(@"unfavorite", nil);
+        if (_selectedFileDto.isFavorite && !self.isCurrentFolderSonOfFavoriteFolder) {
+            favoriteOrUnfavoriteString = NSLocalizedString(@"not_available_offline", nil);
         } else {
-            favoriteOrUnfavoriteString = NSLocalizedString(@"favorite", nil);
+            favoriteOrUnfavoriteString = NSLocalizedString(@"available_offline", nil);
         }
         
         self.moreActionSheet = [[UIActionSheet alloc]initWithTitle:title delegate:self cancelButtonTitle:NSLocalizedString(@"cancel", nil) destructiveButtonTitle: nil otherButtonTitles:NSLocalizedString(@"open_with_label", nil), NSLocalizedString(@"rename_long_press", nil), NSLocalizedString(@"move_long_press", nil), favoriteOrUnfavoriteString, nil];
@@ -3177,14 +3504,13 @@
             [self.moreActionSheet showInView:self.tabBarController.view];
         }else {
             AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
-            if (IS_IOS8) {
+            if (IS_IOS8 || IS_IOS9) {
                 [self.moreActionSheet showInView:app.splitViewController.view];
             } else {
                 [self.moreActionSheet showInView:app.detailViewController.view];
             }
         }
     }
-    
 }
 
 #pragma mark - ManageFavoritesDelegate

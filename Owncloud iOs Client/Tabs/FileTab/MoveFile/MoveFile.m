@@ -28,6 +28,7 @@
 #import "UploadUtils.h"
 #import "UtilsUrls.h"
 #import "ManageUsersDB.h"
+#import "ManageThumbnails.h"
 
 
 @implementation MoveFile
@@ -166,12 +167,24 @@
                 [self moveTheFileOnTheDB];
             }
         }
-    } failureRequest:^(NSHTTPURLResponse *response, NSError *error) {
+    } failureRequest:^(NSHTTPURLResponse *response, NSError *error, NSString *redirectedServer) {
         
         [self endLoading];
         
-        [_manageNetworkErrors manageErrorHttp:response.statusCode andErrorConnection:error andUser:app.activeUser];
+        BOOL isSamlCredentialsError = NO;
         
+        //Check the login error in shibboleth
+        if (k_is_sso_active && redirectedServer) {
+            //Check if there are fragmens of saml in url, in this case there are a credential error
+            isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:redirectedServer];
+            if (isSamlCredentialsError) {
+                [self errorLogin];
+            }
+        }
+        if (!isSamlCredentialsError) {
+            [_manageNetworkErrors manageErrorHttp:response.statusCode andErrorConnection:error andUser:app.activeUser];
+        }
+  
     } errorBeforeRequest:^(NSError *error) {
         
         [self endLoading];
@@ -263,11 +276,11 @@
     //If the origin and the destiny is the same we do not do anything
     if(![destinyFolder isEqualToString:self.selectedFileDto.localFolder]) {
         //delete the old file because if it exist will be override
-        [ManageFilesDB deleteFileByFilePath:newFilePath andFileName:_destinyFilename];
+        [ManageFilesDB deleteFileByFilePath:newFilePath andFileName:self.destinyFilename];
         
-        DLog(@"self.selectedFileDto.fileName: %@", _destinyFilename);
+        DLog(@"self.selectedFileDto.fileName: %@", self.destinyFilename);
         
-        [ManageFilesDB updateFolderOfFileDtoByNewFilePath:newFilePath andDestinationFileDto:destinationFolderFileDto andNewFileName:_destinyFilename andFileDto:_selectedFileDto];
+        [ManageFilesDB updateFolderOfFileDtoByNewFilePath:newFilePath andDestinationFileDto:destinationFolderFileDto andNewFileName:self.destinyFilename andFileDto:self.selectedFileDto];
         
         //We move the file
         if(!self.selectedFileDto.isDirectory) {
@@ -458,7 +471,7 @@
     
     DLog(@"origin: %@",origin);
     DLog(@"destiny: %@", destiny);
-    
+        
     NSFileManager *filemgr;
     
     filemgr = [NSFileManager defaultManager];
@@ -467,11 +480,11 @@
     
     NSError *error;
     
-    [filemgr moveItemAtPath:origin toPath:destiny error:&error];
-    
-    if (error) {
-        DLog(@"Error: %@", error);
+    // Attempt the move
+    if ([filemgr moveItemAtPath:origin toPath:destiny error:&error] != YES) {
+        DLog(@"Unable to move file: %@", [error localizedDescription]);
     }
+
 }
 
 #pragma mark - Delete Folder
@@ -594,6 +607,5 @@
     //Send notification to indicate to close the loading view
     [[NSNotificationCenter defaultCenter] postNotificationName:EndLoadingFileListNotification object: nil];
 }
-
 
 @end

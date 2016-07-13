@@ -15,7 +15,7 @@
 
 
 //app year
-#define k_year 2015
+#define k_year 2016
 
 //URLs Setting
 #define k_help_url @"http://owncloud.com/mobile/help"
@@ -120,8 +120,11 @@
 //Number of uploads shown in recents tab from the database
 #define k_number_uploads_shown 30
 
-//Set text of status bar white only for iOS 7. YES = White | NO = Black
-#define k_is_text_status_bar_white NO
+//Set text of status bar white. YES = White | NO = Black
+#define k_is_text_status_bar_white YES
+
+//Set text of login view status bar white. YES = White | NO = Black
+#define k_is_text_login_status_bar_white NO
 
 //Show the help link on login
 #define k_is_shown_help_link_on_login NO
@@ -137,4 +140,14 @@
 #define k_hide_share_options NO
 
 //Help Guide init app
+<<<<<<< HEAD
 #define k_show_main_help_guide NO
+=======
+#define k_show_main_help_guide YES
+
+//Show share with users
+#define k_is_share_with_users_available YES
+
+//Show share by link
+#define k_is_share_by_link_available YES
+>>>>>>> release3.5.0

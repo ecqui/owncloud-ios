@@ -39,6 +39,9 @@
 #import "DownloadUtils.h"
 #import "UtilsUrls.h"
 #import "RenameFile.h"
+#import "ManageThumbnails.h"
+
+#define k_cell_height 72
 
 @interface RecentViewController ()
 
@@ -74,15 +77,18 @@
     // Release any retained subviews of the main view.
     // e.g. self.myOutlet = nil;
     
-    //Only for iOS 7
-    if (IS_IOS7) {
-        //This new feature of iOS 7 indicate the extend of the edges of the view
-        self.edgesForExtendedLayout = UIRectCornerAllCorners; //UIRectEdgeBottom
-    }
 }
 
 - (void)viewWillAppear:(BOOL)animated{
     [super viewWillAppear:animated];
+    
+    if (IS_IOS8 || IS_IOS9) {
+        self.edgesForExtendedLayout = UIRectEdgeAll;
+        self.extendedLayoutIncludesOpaqueBars = true;
+        self.automaticallyAdjustsScrollViewInsets = true;
+    }else{
+        self.edgesForExtendedLayout = UIRectCornerAllCorners;
+    }
 }
 
 - (void)viewDidAppear:(BOOL)animated{
@@ -100,7 +106,8 @@
 -(void)viewDidLayoutSubviews
 {
     
-    if (IS_IOS8) {
+    if (IS_IOS8 || IS_IOS9) {
+        
         if ([self.uploadsTableView respondsToSelector:@selector(setSeparatorInset:)]) {
             [self.uploadsTableView setSeparatorInset:UIEdgeInsetsMake(0, 10, 0, 0)];
         }
@@ -109,13 +116,19 @@
             [self.uploadsTableView setLayoutMargins:UIEdgeInsetsZero];
         }
         
+        
+        CGRect rect = self.navigationController.navigationBar.frame;
+        float y = rect.size.height + rect.origin.y;
+        self.uploadsTableView.contentInset = UIEdgeInsetsMake(y,0,0,0);
+        
     }
+
 }
 
 -(void)tableView:(UITableView *)tableView willDisplayCell:(UITableViewCell *)cell forRowAtIndexPath:(NSIndexPath *)indexPath
 {
     
-    if (IS_IOS8) {
+    if (IS_IOS8 || IS_IOS9) {
         if ([self.uploadsTableView respondsToSelector:@selector(setSeparatorInset:)]) {
             [self.uploadsTableView setSeparatorInset:UIEdgeInsetsMake(0, 10, 0, 0)];
         }
@@ -293,7 +306,8 @@
         dispatch_async(dispatch_get_main_queue(), ^{
             //Make operations in main thread
             //Do reload data in safe mode (in this way the tableview not broken)
-            [_uploadsTableView performSelectorOnMainThread:@selector(reloadData) withObject:nil waitUntilDone:NO];
+            [_uploadsTableView performSelectorOnMainThread:@selector(reloadData) withObject:nil waitUntilDone:NO];            
+            [self setTheTableFooter];
         });
     });
 
@@ -688,29 +702,6 @@
 
 
 
-// Returns the table view managed by the controller object.
-/*- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section
- {
- //Only show the section title if there are rows in it
- 
- }*/
-
-// Asks the data source to return the titles for the sections for a table view.
-/*- (NSArray *)sectionIndexTitlesForTableView:(UITableView *)tableView
- {
- // The commented part is for the version with searchField
- 
- 
- return ;
- }*/
-
-// Asks the data source to return the index of the section having the given title and section title index.
-/*- (NSInteger)tableView:(UITableView *)tableView sectionForSectionIndexTitle:(NSString *)title atIndex:(NSInteger)index
- {
- 
- 
- return ;
- }*/
 
 #pragma mark - UITableView delegate
 
@@ -765,10 +756,20 @@
     if (indexPath.section == 3) {
         height = [UtilsTableView getUITableViewHeightForSingleRowByNavigationBatHeight:self.navigationController.navigationBar.bounds.size.height andTabBarControllerHeight:self.tabBarController.tabBar.bounds.size.height andTableViewHeight:_uploadsTableView.bounds.size.height];
     } else {
-        height = 72;
+        height = k_cell_height;
     }
     return height;
 }
+
+
+- (void) setTheTableFooter {
+    
+    //Set the footer section so that user can tap latest file if it's under the tabBar
+    UIView *footerView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, self.uploadsTableView.frame.size.width, 40 + self.tabBarController.tabBar.frame.size.height)];
+    footerView.backgroundColor = [UIColor clearColor];
+    [self.uploadsTableView setTableFooterView:footerView];
+}
+
 
 #pragma mark - Methods to resolve the Failed Uploads
 
@@ -779,6 +780,7 @@
     
     DLog(@"user: %ld", (long)app.activeUser.idUser);
     DLog(@"user: %ld", (long)selectedUpload.userId);
+    
     
     if(selectedUpload.userId == app.activeUser.idUser){
         
@@ -984,18 +986,6 @@
 - (void) setNewNameToSaveFile:(NSString *)name {
     DLog(@"setNewNameToSaveFile: %@", name);
     
-    //Get the file related with the upload file if exist and remove the download
-    UserDto *user = [ManageUsersDB getUserByIdUser:self.selectedUploadToResolveTheConflict.userId];
-    
-    NSString *folderName = [UtilsUrls getFilePathOnDBByFullPath:_selectedUploadToResolveTheConflict.destinyFolder andUser:user];
-
-    FileDto *uploadFile = [ManageFilesDB getFileDtoByFileName:self.selectedUploadToResolveTheConflict.uploadFileName andFilePath:folderName andUser:user];
-    
-    if (uploadFile) {
-        [ManageFilesDB setFileIsDownloadState:uploadFile.idFile andState:notDownload];
-        [DownloadUtils removeDownloadFileWithPath:uploadFile.localFolder];
-    }
-    
     _selectedUploadToResolveTheConflict.uploadFileName = name;
     
     [ManageUploadsDB updateErrorConflictFilesSetNewName:[name encodeString:NSUTF8StringEncoding] forUploadOffline:_selectedUploadToResolveTheConflict];
@@ -1005,29 +995,24 @@
     _selectedUploadToResolveTheConflict.kindOfError=notAnError;
     [self updateRecents];
     
-    
     //Relaunch the uploads that failed before
     [app performSelectorInBackground:@selector(relaunchUploadsFailedForced) withObject:nil];
 }
 
 
 - (void) overWriteFile {
+        
      AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
     _selectedUploadToResolveTheConflict.isNotNecessaryCheckIfExist = YES;
-    
     
     [ManageUploadsDB updateErrorConflictFilesSetOverwrite:YES forUploadOffline: _selectedUploadToResolveTheConflict];
     
     //A overwrite process is in progress
     app.isOverwriteProcess = YES;
     
-    //The destinyfolder: https://s3.owncloud.com/owncloud/remote.php/webdav/A/
-    //The folder Name: A/
-    NSString *folderName = [UtilsUrls getFilePathOnDBByFullPath:_selectedUploadToResolveTheConflict.destinyFolder andUser:app.activeUser];
+    FileDto *file = [UploadUtils getFileDtoByUploadOffline:self.selectedUploadToResolveTheConflict];
     
-    //Obtain the file that the user wants overwrite    
-    FileDto *file = nil;
-    file = [ManageFilesDB getFileDtoByFileName:_selectedUploadToResolveTheConflict.uploadFileName andFilePath:folderName andUser:app.activeUser];
+    [[ManageThumbnails sharedManager] removeStoredThumbnailForFile:file];
     
     //Check if this file is being updated and cancel it
     Download *downloadFile;
@@ -1063,6 +1048,23 @@
 - (void)folderSelected:(NSString*)folder{
     
     AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
+    
+    if (self.selectedFileDtoToResolveNotPermission) {
+        
+        //If exist file related with the select upload put in downloaded state
+        //UserDto *user = [ManageUsersDB getUserByIdUser:self.selectedFileDtoToResolveNotPermission.userId];
+        
+       // NSString *parentFolder = [UtilsUrls getFilePathOnDBByFullPath:self.selectedFileDtoToResolveNotPermission.destinyFolder andUser:user];
+        
+      //  FileDto *uploadFile = [ManageFilesDB getFileDtoByFileName:self.selectedFileDtoToResolveNotPermission.uploadFileName andFilePath:parentFolder andUser:user];
+        
+        FileDto *uploadFile = [UploadUtils getFileDtoByUploadOffline:self.selectedFileDtoToResolveNotPermission];
+        
+        if (uploadFile && uploadFile.isDownload == overwriting) {
+            [ManageFilesDB setFileIsDownloadState:uploadFile.idFile andState:downloaded];
+        }
+
+    }
     
     DLog(@"Change Folder");
     //TODO. Change current Remote Folder

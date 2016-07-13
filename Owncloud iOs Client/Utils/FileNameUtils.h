@@ -16,6 +16,7 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import <AssetsLibrary/AssetsLibrary.h>
+#import <Photos/Photos.h>
 
 typedef NS_ENUM (NSInteger, kindOfFileEnum){
     imageFileType = 0,
@@ -46,6 +47,12 @@ typedef NS_ENUM (NSInteger, kindOfFileEnum){
 + (BOOL)isImageSupportedThisFile:(NSString*)fileName;
 
 /*
+ * Method to know if the file is supported by the API of the thumbnail
+ * @fileName -> file name, ex: image.JPG
+ */
++ (BOOL)isRemoteThumbnailSupportThiFile:(NSString*)fileName;
+
+/*
  * Method to know if the file is an video file support for the system
  * Only MOV, MP4, M4V and 3GP video files are supported natively for iOS.
  * @fileName -> file name 
@@ -61,11 +68,17 @@ typedef NS_ENUM (NSInteger, kindOfFileEnum){
 
 /*
  * Method to know if the file is an office file support for the system
- * Only TXT, PDF, DOC, XLS, PPT, RTF, DOCX, PPTX and XLSX type of files
+ * Only NUMBERS.ZIP, NUMBERS, PAGES.ZIP, PAGES, KEY.ZIP, KEY, TXT, PDF, DOC, XLS, PPT, RTF, DOCX, PPTX, XLSX, XML, HTM and HTML type of files
  * are supported for the moment.
- * @fileName -> file name 
+ * @fileName -> file name
  */
 + (BOOL)isOfficeSupportedThisFile:(NSString*)fileName;
+
+/*
+ * Method to know if the file is an edit file supported by the system for the moment.
+ * @fileName -> file name
+ */
++ (BOOL)isEditTextViewSupportedThisFile:(NSString*)fileName;
 
 /*
  * Method to know if the image file can be scaled.
@@ -96,13 +109,12 @@ typedef NS_ENUM (NSInteger, kindOfFileEnum){
  * and return the bollean result
  @urlString -> url from redirect server
  */
-
 + (BOOL)isURLWithSamlFragment:(NSString*)urlString;
+
 
 ///-----------------------------------
 /// @name Get the Name of the Brand Image
 ///-----------------------------------
-
 /**
  * This method return a string with the name of the brand image
  * Used by ownCloud and other brands
@@ -112,14 +124,12 @@ typedef NS_ENUM (NSInteger, kindOfFileEnum){
  *
  * @return image name -> NSString
  */
-
 + (NSString *)getTheNameOfTheBrandImage;
 
 
 ///-----------------------------------
 /// @name Get the Name of shared path
 ///-----------------------------------
-
 /**
  * This method get the name of Share Path
  * Share path is like this: /documents/example.doc
@@ -138,7 +148,6 @@ typedef NS_ENUM (NSInteger, kindOfFileEnum){
 ///-----------------------------------
 /// @name Get the Parent Path of the Full Shared Path
 ///-----------------------------------
-
 /**
  * This method make the parent path using the full path
  *
@@ -149,14 +158,12 @@ typedef NS_ENUM (NSInteger, kindOfFileEnum){
  * @return output -> NSString
  *
  */
-
 + (NSString*)getTheParentPathOfFullSharedPath:(NSString*)sharedPath isDirectory:(BOOL)isDirectory;
 
 
 ///-----------------------------------
 /// @name markFileNameOnAlertView
 ///-----------------------------------
-
 /**
  * This method marks the text on an alert View
  *
@@ -180,5 +187,12 @@ typedef NS_ENUM (NSInteger, kindOfFileEnum){
  */
 + (NSString *)getComposeNameFromPath:(NSString *) path;
 
+///-----------------------------------
+/// @name getComposeNameFromPHAsset
+///-----------------------------------
+/*
+ Method to generate the name of the file depending if it is a video or an image
+ */
++ (NSString *)getComposeNameFromPHAsset:(PHAsset *)asset;
 
 @end

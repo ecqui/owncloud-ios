@@ -19,7 +19,6 @@
 @class FileDto;
 @class UploadsOfflineDto;
 
-extern NSString * PreviewFileNotification;
 
 @interface UploadUtils : NSObject
 
@@ -36,6 +35,8 @@ extern NSString * PreviewFileNotification;
 + (FileDto *) getFileDtoByUploadOffline:(UploadsOfflineDto *) uploadsOfflineDto;
 
 + (ALAssetsLibrary *)defaultAssetsLibrary;
+
++ (BOOL) moveFinishedUploadTempFileToLocalPathByUploadsOfflineDto:(UploadsOfflineDto *)currentUpload;
 
 @end
 

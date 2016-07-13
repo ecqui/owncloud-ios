@@ -35,6 +35,7 @@
 #import "UtilsUrls.h"
 #import "ShareMainViewController.h"
 #import "OCNavigationController.h"
+#import "ManageCapabilitiesDB.h"
 
 
 //Three sections {shared items - not shared items msg - not share api support msg}
@@ -55,6 +56,8 @@
     self = [super initWithNibName:nibNameOrNil bundle:nibBundleOrNil];
     if (self) {
         // Custom initialization
+        self.manageNetworkErrors = [ManageNetworkErrors new];
+        self.manageNetworkErrors.delegate = self;
     }
     return self;
 }
@@ -90,6 +93,14 @@
 
 - (void)viewWillAppear:(BOOL)animated{
     [super viewWillAppear:animated];
+    
+    if (IS_IOS8 || IS_IOS9) {
+        self.edgesForExtendedLayout = UIRectEdgeAll;
+        self.extendedLayoutIncludesOpaqueBars = true;
+        self.automaticallyAdjustsScrollViewInsets = true;
+    }else{
+        self.edgesForExtendedLayout = UIRectCornerAllCorners;
+    }
     
     //Get offline data
     [self refreshWithDataBaseSharedItems];
@@ -134,24 +145,29 @@
 -(void)viewDidLayoutSubviews
 {
     
-    if (IS_IOS8) {
+    if (IS_IOS8 || IS_IOS9) {
+        
         if ([self.sharedTableView respondsToSelector:@selector(setSeparatorInset:)]) {
-            [self.sharedTableView setSeparatorInset:UIEdgeInsetsMake(0, 9, 0, 0)];
+            [self.sharedTableView setSeparatorInset:UIEdgeInsetsMake(0, 10, 0, 0)];
         }
         
         if ([self.sharedTableView respondsToSelector:@selector(setLayoutMargins:)]) {
             [self.sharedTableView setLayoutMargins:UIEdgeInsetsZero];
         }
         
-    }
-}
+        
+        CGRect rect = self.navigationController.navigationBar.frame;
+        float y = rect.size.height + rect.origin.y;
+        self.sharedTableView.contentInset = UIEdgeInsetsMake(y,0,0,0);
+        
+    }}
 
 -(void)tableView:(UITableView *)tableView willDisplayCell:(UITableViewCell *)cell forRowAtIndexPath:(NSIndexPath *)indexPath
 {
     
-    if (IS_IOS8) {
+    if (IS_IOS8 || IS_IOS9) {
         if ([self.sharedTableView respondsToSelector:@selector(setSeparatorInset:)]) {
-            [self.sharedTableView setSeparatorInset:UIEdgeInsetsMake(0, 9, 0, 0)];
+            [self.sharedTableView setSeparatorInset:UIEdgeInsetsMake(0, 10, 0, 0)];
         }
         
         if ([self.sharedTableView respondsToSelector:@selector(setLayoutMargins:)]) {
@@ -159,6 +175,7 @@
         }
         
     }
+    
 }
 
 
@@ -284,7 +301,9 @@
             DLog(@"File not catched yet");
             file = [self getFileNotCatchedBySharedPath:temp];
         }
-        [fileImages addObject:file];
+        if (file) {
+            [fileImages addObject:file];
+        }
     }
     
     //Free memory
@@ -367,26 +386,50 @@
                 //Finish the refresh
                 _isRefreshSharedInProgress = NO;
                 
-            } failureRequest:^(NSHTTPURLResponse *response, NSError *error) {
-                _sharedLinkItems = [ManageSharesDB getAllSharesByUser:app.activeUser.idUser anTypeOfShare:shareTypeLink];
+            } failureRequest:^(NSHTTPURLResponse *response, NSError *error, NSString *redirectedServer) {
                 
-                //Sorted by share time
-                _sharedLinkItems = [self getArraySortByShareDate:_sharedLinkItems];
+                BOOL isSamlCredentialsError=NO;
                 
-                //Refresh the list of share items
-                [_sharedTableView reloadData];
-                
-                DLog(@"error: %@", error);
-                DLog(@"Operation error: %ld", (long)response.statusCode);
-                
-                //Only if the user do refresh manually, same behaviour like in Foi
-                if (_refreshControl.refreshing) {
-                    //Manage Server error
-                    [self manageServerErrors:response.statusCode and:error];
+                //Check the login error in shibboleth
+                if (k_is_sso_active) {
+                    NSURL *samlRedirectUrl = [NSURL URLWithString:redirectedServer];
+                    NSHTTPURLResponse *responseCopyWithSamlRedirectUrl = [[NSHTTPURLResponse alloc]initWithURL:samlRedirectUrl statusCode:response.statusCode HTTPVersion:nil headerFields:[response allHeaderFields]];
+                    
+                    //Check if there are fragmens of saml in url, in this case there are a credential error
+                    isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:responseCopyWithSamlRedirectUrl.URL.absoluteString];
+                    
+                    if (isSamlCredentialsError) {
+                        
+                        if (_refreshControl.refreshing) {
+                            //Manage Server error
+                            [self errorLogin];
+                        }
+                    }
                 }
                 
-                //Stop loading pull refresh
-                [self stopPullRefresh];
+                if (!isSamlCredentialsError) {
+                
+                    _sharedLinkItems = [ManageSharesDB getAllSharesByUser:app.activeUser.idUser anTypeOfShare:shareTypeLink];
+                    
+                    //Sorted by share time
+                    _sharedLinkItems = [self getArraySortByShareDate:_sharedLinkItems];
+                    
+                    //Refresh the list of share items
+                    [_sharedTableView reloadData];
+                    
+                    DLog(@"error: %@", error);
+                    DLog(@"Operation error: %ld", (long)response.statusCode);
+                    
+                    //Only if the user do refresh manually, same behaviour like in Foi
+                    if (_refreshControl.refreshing) {
+
+                        [self.manageNetworkErrors manageErrorHttp:response.statusCode andErrorConnection:error andUser:app.activeUser];
+                    }
+                    
+                    //Stop loading pull refresh
+                    [self stopPullRefresh];
+                
+                }
                 
                 //Finish the refresh
                 _isRefreshSharedInProgress = NO;
@@ -443,61 +486,6 @@
     [self performSelectorOnMainThread:@selector(showAlertView:)
                            withObject:message
                         waitUntilDone:YES];
-}
-
-/*
- * Method called when receive a fail from server side
- * @errorCodeFromServer -> WebDav Server Error of NSURLResponse
- * @error -> NSError of NSURLConnection
- */
-
-- (void)manageServerErrors: (NSInteger)errorCodeFromServer and:(NSError *)error{
-    
-    NSInteger code = errorCodeFromServer;
-    
-    DLog(@"Error code from  web dav server: %ld", (long)code);
-    DLog(@"Error code from server: %ld", (long)error.code);
-    
-    [self stopPullRefresh];
-    
-    AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
-    
-    //Server connection error
-    switch (error.code) {
-        case NSURLErrorServerCertificateUntrusted: //-1202
-            [_mCheckAccessToServer isConnectionToTheServerByUrl:app.activeUser.url];
-            break;
-            
-        default:
-            
-            //Web Dav Error Code
-            switch (code) {
-                case kOCErrorServerUnauthorized:
-                    //Unauthorized (bad username or password)
-                    [self errorLogin];
-                    break;
-                case kOCErrorServerForbidden:
-                    //403 Forbidden
-                    [self showError:NSLocalizedString(@"error_not_permission", nil)];
-                    break;
-                case kOCErrorServerPathNotFound:
-                    //404 Not Found. When for example we try to access a path that now not exist
-                    [self showError:NSLocalizedString(@"error_path", nil)];
-                    break;
-                case kOCErrorServerMethodNotPermitted:
-                    //405 Method not permitted
-                    [self showError:NSLocalizedString(@"not_possible_create_folder", nil)];
-                    break;
-                case kOCErrorServerTimeout:
-                    //408 timeout
-                    [self showError:NSLocalizedString(@"not_possible_connect_to_server", nil)];
-                    break;
-                default:
-                    [self showError:NSLocalizedString(@"not_possible_connect_to_server", nil)];
-                    break;
-            }
-            break;
-    }
 }
 
 
@@ -683,7 +671,7 @@
 
         //Obtain the path where the folder will be created in the file system
         NSString *rootPath = [NSString stringWithFormat:@"%@", newFolder.filePath];
-        NSString *currentLocalFileToCreateFolder = [NSString stringWithFormat:@"%@/%ld/%@",[UtilsUrls getOwnCloudFilePath],(long)app.activeUser.idUser,[rootPath stringByReplacingPercentEscapesUsingEncoding:NSUTF8StringEncoding]];
+        NSString *currentLocalFileToCreateFolder = [NSString stringWithFormat:@"%@%ld/%@",[UtilsUrls getOwnCloudFilePath],(long)app.activeUser.idUser,[rootPath stringByReplacingPercentEscapesUsingEncoding:NSUTF8StringEncoding]];
         //Remove the "/"
         NSString *name = [newFolder.fileName substringToIndex:[newFolder.fileName length]-1];
         
@@ -965,7 +953,8 @@
     [self obtainTheQuantityOfFilesAndFolders];
     
     //Set the text of the footer section
-    UIView *footerView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, _sharedTableView.bounds.size.width, 40)];
+    UIView *footerView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, _sharedTableView.bounds.size.width, 40 + self.tabBarController.tabBar.frame.size.height)];
+    footerView.backgroundColor = [UIColor clearColor];
     UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, _sharedTableView.bounds.size.width, 40)];
     
     UIFont *appFont = [UIFont fontWithName:@"HelveticaNeue" size:16];
@@ -1037,49 +1026,56 @@
         if ([FileNameUtils isImageSupportedThisFile:file.fileName]) {
             filesArray = [self getFileDtoWithOCSharedDtoArray:_sharedLinkItems];
         }else{
-            filesArray = [NSArray arrayWithObject:file];
-        }
-        
-        NSMutableArray *sortArray = [NSMutableArray new];
-        [sortArray addObject:filesArray];
-        
-        
-        if (IS_IPHONE) {
-            //iPhone
-            [tableView deselectRowAtIndexPath:indexPath animated:YES];
-            
-            DLog(@"File name is: %@", file.fileName);
-            FilePreviewViewController *viewController = [[FilePreviewViewController alloc]initWithNibName:@"FilePreviewViewController" selectedFile:file];
-            viewController.hidesBottomBarWhenPushed = YES;
-            viewController.sortedArray=sortArray;
-            
-            [self.navigationController.navigationBar setTranslucent:NO];
-            
-            self.navigationItem.backBarButtonItem = nil;
-            
-            self.navigationItem.backBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"" style:UIBarButtonItemStylePlain target:nil action:nil];
-            
-            [self.navigationController pushViewController:viewController animated:YES];
-            
-        } else {
-            //iPad
-            //Select in detail view
-            if (_selectedCell) {
-                ShareLinkCell *temp = (ShareLinkCell*) [_sharedTableView cellForRowAtIndexPath:_selectedCell];
-                [temp setSelectedStrong:NO];
+            if (file) {
+                filesArray = [NSArray arrayWithObject:file];
             }
+        }
+
+        
+        if (file) {
             
-            //Set selected indexPath
-            _selectedCell = indexPath;
+            NSMutableArray *sortArray = [NSMutableArray new];
+            if (filesArray) {
+                [sortArray addObject:filesArray];
+            };
             
-            AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
-            
-            app.detailViewController.sortedArray=sortArray;
-            [app.detailViewController handleFile:file fromController:sharedViewManagerController];
-         
-            ShareLinkCell *sharedLink = (ShareLinkCell*) [_sharedTableView cellForRowAtIndexPath:indexPath];
-            [sharedLink setSelectedStrong:YES];
-            
+            if (IS_IPHONE) {
+                //iPhone
+                [tableView deselectRowAtIndexPath:indexPath animated:YES];
+                
+                DLog(@"File name is: %@", file.fileName);
+                FilePreviewViewController *viewController = [[FilePreviewViewController alloc]initWithNibName:@"FilePreviewViewController" selectedFile:file];
+                viewController.hidesBottomBarWhenPushed = YES;
+                viewController.sortedArray=sortArray;
+                
+                [self.navigationController.navigationBar setTranslucent:NO];
+                
+                self.navigationItem.backBarButtonItem = nil;
+                
+                self.navigationItem.backBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"" style:UIBarButtonItemStylePlain target:nil action:nil];
+                
+                [self.navigationController pushViewController:viewController animated:YES];
+                
+            } else {
+                //iPad
+                //Select in detail view
+                if (_selectedCell) {
+                    ShareLinkCell *temp = (ShareLinkCell*) [_sharedTableView cellForRowAtIndexPath:_selectedCell];
+                    [temp setSelectedStrong:NO];
+                }
+                
+                //Set selected indexPath
+                _selectedCell = indexPath;
+                
+                AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
+                
+                app.detailViewController.sortedArray=sortArray;
+                [app.detailViewController handleFile:file fromController:sharedViewManagerController];
+                
+                ShareLinkCell *sharedLink = (ShareLinkCell*) [_sharedTableView cellForRowAtIndexPath:indexPath];
+                [sharedLink setSelectedStrong:YES];
+                
+            }
         }
     }
     
@@ -1116,7 +1112,7 @@
 - (NSArray *)setSwipeLeftButtons
 {
     //Check the share options should be presented
-    if (k_hide_share_options) {
+    if ((k_hide_share_options) || (APP_DELEGATE.activeUser.hasCapabilitiesSupport == serverFunctionalitySupported && APP_DELEGATE.activeUser.capabilitiesDto && !APP_DELEGATE.activeUser.capabilitiesDto.isFilesSharingAPIEnabled)) {
         
         return nil;
         

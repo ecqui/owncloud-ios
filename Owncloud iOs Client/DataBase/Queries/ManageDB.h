@@ -201,4 +201,47 @@
  */
 + (void) updateDBVersion13To14;
 
+///-----------------------------------
+/// @name Update Database version with 14 version to 15
+///-----------------------------------
+
+/**
+ * Changes:
+ *
+ * Alter users table, added new field to store that the server has sharee API support.
+ *
+ */
++ (void) updateDBVersion14To15;
+
+///-----------------------------------
+/// @name Update Database version with 15 version to 16
+///-----------------------------------
+
+/**
+ * Changes:
+ *
+ * Alter passcode table, added new field to store if Touch ID is active or not.
+ *
+ */
++ (void) updateDBVersion15To16;
+
+///-----------------------------------
+/// @name Update Database version with 16 version to 17
+///-----------------------------------
+
+/**
+ * Changes:
+ *
+ * Alter files and files_backup table, added new field to store oc:id
+ * Alter users table, added new field to store the sorting choice for showing folders/files in file list.
+ */
++ (void) updateDBVersion16To17;
+
+/**
+ * Changes:
+ *
+ * Alter users table, adds new field to track user background Instant Upload preference
+ */
++ (void) updateDBVersion17To18;
+
 @end

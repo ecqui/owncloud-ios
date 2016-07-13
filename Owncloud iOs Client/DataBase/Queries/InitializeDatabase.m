@@ -6,6 +6,14 @@
 //
 //
 
+/*
+ Copyright (C) 2015, ownCloud, Inc.
+ This code is covered by the GNU Public License Version 3.
+ For distribution utilizing Apple mechanisms please see https://owncloud.org/contribute/iOS-license-exception/
+ You should have received a copy of this license
+ along with this program. If not, see <http://www.gnu.org/licenses/gpl-3.0.en.html>.
+ */
+
 #import "InitializeDatabase.h"
 #import "CredentialsDto.h"
 #import "OCKeychain.h"
@@ -13,6 +21,7 @@
 #import "ManageFilesDB.h"
 #import "ManageUsersDB.h"
 #import "UtilsUrls.h"
+#import "ManageThumbnails.h"
 
 #define k_DB_version_1 1
 #define k_DB_version_2 2
@@ -28,6 +37,10 @@
 #define k_DB_version_12 12
 #define k_DB_version_13 13
 #define k_DB_version_14 14
+#define k_DB_version_15 15
+#define k_DB_version_16 16
+#define k_DB_version_17 17
+#define k_DB_version_18 18
 
 @implementation InitializeDatabase
 
@@ -41,7 +54,7 @@
 + (void) initDataBase {
     
     //New version
-    static int dbVersion = k_DB_version_14;
+    static int dbVersion = k_DB_version_18;
     
     //This method make a new database
     [ManageDB createDataBase];
@@ -53,128 +66,46 @@
         [ManageDB removeTable:@"files_backup"];
         [ManageDB createDataBase];
     } else {
+        //Switch uses fallthrough to handle migrations - don't add "break" to your migration
         switch ([ManageDB getDatabaseVersion]) {
             case k_DB_version_1:
                 [ManageDB updateDBVersion1To2];
-                [ManageDB updateDBVersion2To3];
-                [ManageDB updateDBVersion3To4];
-                [ManageDB updateDBVersion4To5];
-                [ManageDB updateDBVersion5To6];
-                [ManageDB updateDBVersion6To7];
-                [self updateDBVersion7To8];
-                [ManageDB updateDBVersion8To9];
-                [ManageDB updateDBVersion9To10];
-                [ManageDB updateDBVersion10To11];
-                [ManageDB updateDBVersion11To12];
-                [ManageDB updateDBVersion12To13];
-                [ManageDB updateDBVersion13To14];
-                break;
             case k_DB_version_2:
                 [ManageDB updateDBVersion2To3];
                 [self removeURLEncodingFromAllFilesAndFoldersInTheFileSystem];
-                [ManageDB updateDBVersion3To4];
-                [ManageDB updateDBVersion4To5];
-                [ManageDB updateDBVersion5To6];
-                [ManageDB updateDBVersion6To7];
-                [self updateDBVersion7To8];
-                [ManageDB updateDBVersion8To9];
-                [ManageDB updateDBVersion9To10];
-                [ManageDB updateDBVersion10To11];
-                [ManageDB updateDBVersion11To12];
-                [ManageDB updateDBVersion12To13];
-                [ManageDB updateDBVersion13To14];
-                break;
             case k_DB_version_3:
                 [ManageDB updateDBVersion3To4];
-                [ManageDB updateDBVersion4To5];
-                [ManageDB updateDBVersion5To6];
-                [ManageDB updateDBVersion6To7];
-                [self updateDBVersion7To8];
-                [ManageDB updateDBVersion8To9];
-                [ManageDB updateDBVersion9To10];
-                [ManageDB updateDBVersion10To11];
-                [ManageDB updateDBVersion11To12];
-                [ManageDB updateDBVersion12To13];
-                [ManageDB updateDBVersion13To14];
-                break;
             case k_DB_version_4:
                 [ManageDB updateDBVersion4To5];
-                [ManageDB updateDBVersion5To6];
-                [ManageDB updateDBVersion6To7];
-                [self updateDBVersion7To8];
-                [ManageDB updateDBVersion8To9];
-                [ManageDB updateDBVersion9To10];
-                [ManageDB updateDBVersion10To11];
-                [ManageDB updateDBVersion11To12];
-                [ManageDB updateDBVersion12To13];
-                [ManageDB updateDBVersion13To14];
-                break;
             case k_DB_version_5:
                 [ManageDB updateDBVersion5To6];
-                [ManageDB updateDBVersion6To7];
-                [self updateDBVersion7To8];
-                [ManageDB updateDBVersion8To9];
-                [ManageDB updateDBVersion9To10];
-                [ManageDB updateDBVersion10To11];
-                [ManageDB updateDBVersion11To12];
-                [ManageDB updateDBVersion12To13];
-                [ManageDB updateDBVersion13To14];
-                break;
             case k_DB_version_6:
                 [ManageDB updateDBVersion6To7];
-                [self updateDBVersion7To8];
-                [ManageDB updateDBVersion8To9];
-                [ManageDB updateDBVersion9To10];
-                [ManageDB updateDBVersion10To11];
-                [ManageDB updateDBVersion11To12];
-                [ManageDB updateDBVersion12To13];
-                [ManageDB updateDBVersion13To14];
-                break;
             case k_DB_version_7:
                 [self updateDBVersion7To8];
-                [ManageDB updateDBVersion8To9];
-                [ManageDB updateDBVersion9To10];
-                [ManageDB updateDBVersion10To11];
-                [ManageDB updateDBVersion11To12];
-                [ManageDB updateDBVersion12To13];
-                [ManageDB updateDBVersion13To14];
-                break;
             case k_DB_version_8:
                 [ManageDB updateDBVersion8To9];
-                [ManageDB updateDBVersion9To10];
-                [ManageDB updateDBVersion10To11];
-                [ManageDB updateDBVersion11To12];
-                [ManageDB updateDBVersion12To13];
-                [ManageDB updateDBVersion13To14];
-                break;
             case k_DB_version_9:
                 [ManageDB updateDBVersion9To10];
-                [ManageDB updateDBVersion10To11];
-                [ManageDB updateDBVersion11To12];
-                [ManageDB updateDBVersion12To13];
-                [ManageDB updateDBVersion13To14];
-                break;
             case k_DB_version_10:
                 [ManageDB updateDBVersion10To11];
-                [ManageDB updateDBVersion11To12];
-                [ManageDB updateDBVersion12To13];
-                [ManageDB updateDBVersion13To14];
-                break;
             case k_DB_version_11:
                 [ManageDB updateDBVersion11To12];
-                [ManageDB updateDBVersion12To13];
-                [ManageDB updateDBVersion13To14];
-                break;
             case k_DB_version_12:
                 [ManageDB updateDBVersion12To13];
                 //Update keychain of all the users
                 [OCKeychain updateAllKeychainsToUseTheLockProperty];
-                [ManageDB updateDBVersion12To13];
-                [ManageDB updateDBVersion13To14];
-                break;
             case k_DB_version_13:
                 [ManageDB updateDBVersion13To14];
-                break;
+            case k_DB_version_14:
+                [ManageDB updateDBVersion14To15];
+            case k_DB_version_15:
+                [ManageDB updateDBVersion15To16];
+            case k_DB_version_16:
+                [self updateDBVersion16To17];
+            case k_DB_version_17:
+                [ManageDB updateDBVersion17To18];
+                break; //Insert your migration above this final break.
         }
     }
     
@@ -182,15 +113,10 @@
     [ManageDB insertVersionToDataBase:dbVersion];
     
     /*Reset keychain items when db need to be updated or when db first init after app has been removed and reinstalled */
-    NSMutableArray * users = [ManageUsersDB getAllUsers];
-    if (![users count]) {
+    if (![ManageUsersDB isUsers]) {
         //delete all keychain items
         [OCKeychain resetKeychain];
     }
-    
-    CredentialsDto *credDto = [OCKeychain getCredentialsById:@"1"];
-    DLog(@"User: %@", credDto.userName);
-    DLog(@"Password: %@", credDto.password);
 }
 
 #pragma mark - System Updates
@@ -237,6 +163,27 @@
 + (void) updateDBVersion7To8 {
     [ManageDB updateDBVersion7To8];
     [ManageFilesDB deleteAlleTagOfTheDirectoties];
+}
+
+///-----------------------------------
+/// @name updateDBVersion16To17
+///-----------------------------------
+
+/**
+ * This method updates the DB from 16 to 17 version and delete the folder of the thumbnails to force the generation of the thumbnails Offline
+ */
++ (void) updateDBVersion16To17 {
+    
+    NSString *path = [UtilsUrls getThumbnailFolderPath];
+    
+    if ([[NSFileManager defaultManager] fileExistsAtPath:path]) {
+        NSError *error = nil;
+        [[NSFileManager defaultManager] removeItemAtPath:path error:&error];
+    }
+    
+    [ManageFilesDB deleteAlleTagOfTheDirectoties];
+    
+    [ManageDB updateDBVersion16To17];
 }
 
 @end

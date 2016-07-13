@@ -26,6 +26,7 @@
 #import "DetailViewController.h"
 #import "OCCommunication.h"
 #import "OCURLSessionManager.h"
+#import "ManageUsersDB.h"
 
 
 @interface ManageDownloads()
@@ -78,10 +79,15 @@
 - (void)cancelDownloads {
     
     self.isCancelingAllDownloads = YES;
-    
     NSArray *temp = [NSArray arrayWithArray:self.downloads];
     
+    UserDto *user = nil;
+    
     for (Download *download in temp) {
+        if (!user) {
+            user = [ManageUsersDB getUserByIdUser:download.fileDto.userId];
+        }
+        download.user = user;
         [download cancelDownload];
     }
     
@@ -101,45 +107,37 @@
 
 - (void) addDownload:(Download *)download{
     
-    if (k_is_sso_active||!k_is_background_active) {
-        
-        [self.downloads addObject:download];
-        
-    } else {
-        
-        [[AppDelegate sharedOCCommunication].downloadSessionManager.operationQueue cancelAllOperations];
-        
-        if (self.downloads.count > 0) {
-            for (Download *temp in self.downloads) {
-                if (temp.downloadTask.state == NSURLSessionTaskStateRunning) {
-                    temp.isForceCanceling = YES;
-                    [temp.downloadTask cancel];
-                }
-            }
-            
-            NSMutableArray *downs = [NSMutableArray arrayWithArray:self.downloads];
-            
-            for (Download *temp in self.downloads) {
-                if ([temp.fileDto.localFolder isEqualToString:download.fileDto.localFolder]) {
-                    [downs removeObjectIdenticalTo:temp];
-                    break;
-                }
-            }
-            self.downloads = [NSMutableArray arrayWithArray:downs];
-        }
-        
-        if (!download.delegate) {
-            download.delegate = self;
-        }
-        
-        if (download.downloadTask) {
-            [self.downloads addObject:download];
-            if (download.downloadTask.state != NSURLSessionTaskStateRunning) {
-                [download.downloadTask resume];
+    [[AppDelegate sharedOCCommunication].downloadSessionManager.operationQueue cancelAllOperations];
+    
+    if (self.downloads.count > 0) {
+        for (Download *temp in self.downloads) {
+            if (temp.downloadTask.state == NSURLSessionTaskStateRunning) {
+                temp.isForceCanceling = YES;
+                [temp.downloadTask cancel];
             }
         }
+        
+        NSMutableArray *downs = [NSMutableArray arrayWithArray:self.downloads];
+        //To be sure that the download is not duplicated we remove all the identical
+        for (Download *temp in self.downloads) {
+            if ([temp.fileDto.localFolder isEqualToString:download.fileDto.localFolder]) {
+                [downs removeObjectIdenticalTo:temp];
+                break;
+            }
+        }
+        self.downloads = [NSMutableArray arrayWithArray:downs];
     }
     
+    if (!download.delegate) {
+        download.delegate = self;
+    }
+    
+    if (download.downloadTask) {
+        [self.downloads addObject:download];
+        if (download.downloadTask.state != NSURLSessionTaskStateRunning) {
+            [download.downloadTask resume];
+        }
+    }
 }
 
 - (void) addSimpleDownload:(Download *)download{
@@ -163,7 +161,6 @@
 
 - (void) removeDownload:(Download *)download{
     
-    if ((IS_IOS7 || IS_IOS8) && !k_is_sso_active){
         
         BOOL exist = NO;
         
@@ -184,27 +181,6 @@
                 [self resumeNextDownload];
             }
         }
-        
-    } else {
-        
-        BOOL exist = NO;
-        
-        for (Download *temp in self.downloads) {
-            if ([temp isEqual:download]) {
-                exist = YES;
-                break;
-            }
-        }
-        
-        if (exist) {
-            
-            NSMutableArray *downs = [NSMutableArray arrayWithArray:self.downloads];
-            [downs removeObjectIdenticalTo:download];
-            self.downloads = [NSMutableArray arrayWithArray:downs];
-            
-        }
-        
-    }
     
 }
 
@@ -274,7 +250,7 @@
     NSLog(@"Manage Downloads: ERROR LOGIN");
     
     NSMutableArray *downloadsFromDB = [NSMutableArray new];
-    [downloadsFromDB addObjectsFromArray:[ManageFilesDB getFilesByDownloadStatus:downloading]];
+    [downloadsFromDB addObjectsFromArray:[ManageFilesDB getFilesByDownloadStatus:downloading andUser:APP_DELEGATE.activeUser]];
     
     //Put "notdownload" state all files in download
     for (FileDto *file in downloadsFromDB) {
@@ -306,8 +282,8 @@
 #pragma mark - FileList
 
 - (void)reloadFileList{
-      AppDelegate *appDelegate = (AppDelegate *)[[UIApplication sharedApplication]delegate];
-       [appDelegate.presentFilesViewController reloadTableFromDataBase];
+    AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
+    [app.presentFilesViewController reloadTableFromDataBase];
 }
 
 

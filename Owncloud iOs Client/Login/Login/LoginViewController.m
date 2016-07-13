@@ -42,6 +42,9 @@
 #define k_http_prefix @"http://"
 #define k_https_prefix @"https://"
 
+#define k_remove_to_suffix @"/index.php"
+#define k_remove_to_contains_path @"/index.php/apps/"
+
 NSString *loginViewControllerRotate = @"loginViewControllerRotate";
 
 @interface LoginViewController ()
@@ -121,10 +124,9 @@ NSString *loginViewControllerRotate = @"loginViewControllerRotate";
 
 - (void)viewWillAppear:(BOOL)animated {
     
-     [super viewWillAppear:animated];
+    [super viewWillAppear:animated];
     
-    mCheckAccessToServer = [[CheckAccessToServer alloc] init];
-    mCheckAccessToServer.delegate = self;
+    ((CheckAccessToServer *)[CheckAccessToServer sharedManager]).delegate = self;
     
     if(self.urlTextField.text.length > 0 && isConnectionToServer == NO) {
         [self checkUrlManually];
@@ -150,7 +152,7 @@ NSString *loginViewControllerRotate = @"loginViewControllerRotate";
 //For one of the next user story
 -(UIStatusBarStyle)preferredStatusBarStyle {
     
-    if (k_is_text_status_bar_white) {
+    if (k_is_text_login_status_bar_white) {
         return UIStatusBarStyleLightContent;
     } else {
         return UIStatusBarStyleDefault;
@@ -242,22 +244,16 @@ NSString *loginViewControllerRotate = @"loginViewControllerRotate";
     //to set the scroll
     self.tableView.contentInset = UIEdgeInsetsMake(0, 0, 260, 0);
     
-    //Padding correction in case of versions lower that iOS 7
-    float leftPaddingCorrection = 0.0;
-    if (!IS_IOS7 && !IS_IOS8) {
-        leftPaddingCorrection = - 10.0;
-    }
-    
 //FIRST SECTION
     
     //Frame for url field
-     _urlFrame = CGRectMake(60 + leftPaddingCorrection,14,200,20);
+     _urlFrame = CGRectMake(60,14,200,20);
     
     //Server image - User image - Password image
-    _imageTextFieldLeftFrame = CGRectMake(20.0 + leftPaddingCorrection, 10.0, 25.0, 25.0);
+    _imageTextFieldLeftFrame = CGRectMake(20.0, 10.0, 25.0, 25.0);
     
     //Refresh button
-    refreshButtonFrame = CGRectMake(260.0 + leftPaddingCorrection, 10.0, 25.0, 25.0);
+    refreshButtonFrame = CGRectMake(260.0, 10.0, 25.0, 25.0);
     
     
     
@@ -273,10 +269,10 @@ NSString *loginViewControllerRotate = @"loginViewControllerRotate";
 //SECOND SECTION
     
     //user and password text fields frame
-    _userAndPasswordFrame = CGRectMake(60 + leftPaddingCorrection,14,200,20);
+    _userAndPasswordFrame = CGRectMake(60,14,200,20);
     
     //image about show/hide the password
-    showPasswordButtonFrame = CGRectMake(260.0 + leftPaddingCorrection, 10.0, 25.0, 25.0);
+    showPasswordButtonFrame = CGRectMake(260.0, 10.0, 25.0, 25.0);
     
 
 //FOOTER FOR SECOND SECTION
@@ -298,7 +294,7 @@ NSString *loginViewControllerRotate = @"loginViewControllerRotate";
     _txtWithLogoWhenNoURLFrame = CGRectMake(0,0,320,90);
     
     //Frame used for reconection icon
-    syncImageFrameForNoURL = CGRectMake(280.0 + leftPaddingCorrection, 5.0, 25.0, 25.0);
+    syncImageFrameForNoURL = CGRectMake(280.0, 5.0, 25.0, 25.0);
 
 
     
@@ -311,22 +307,16 @@ NSString *loginViewControllerRotate = @"loginViewControllerRotate";
     //to set the scroll
     self.tableView.contentInset = UIEdgeInsetsMake(0, 0, 260, 0);
     
-    //Padding correction in case of versions lower that iOS 7
-    float leftPaddingCorrection = 0.0;
-    if (!IS_IOS7 && !IS_IOS8) {
-        leftPaddingCorrection = - 10.0;
-    }
-    
     //FIRST SECTION
     
     //Frame for url field
-    _urlFrame = CGRectMake(60 + leftPaddingCorrection,14,420,20);
+    _urlFrame = CGRectMake(60,14,420,20);
     
     //Server image - User image - Password image
-    _imageTextFieldLeftFrame = CGRectMake(20.0 + leftPaddingCorrection, 10.0, 25.0, 25.0);
+    _imageTextFieldLeftFrame = CGRectMake(20.0, 10.0, 25.0, 25.0);
     
     //Refresh button
-    refreshButtonFrame = CGRectMake(480.0 + leftPaddingCorrection, 10.0, 25.0, 25.0);
+    refreshButtonFrame = CGRectMake(480.0, 10.0, 25.0, 25.0);
     
     
     
@@ -342,10 +332,10 @@ NSString *loginViewControllerRotate = @"loginViewControllerRotate";
     //SECOND SECTION
     
     //user and password text fields frame
-    _userAndPasswordFrame = CGRectMake(60 + leftPaddingCorrection,14,420,20);
+    _userAndPasswordFrame = CGRectMake(60 ,14,420,20);
     
     //image about show/hide the password
-    showPasswordButtonFrame = CGRectMake(480.0 + leftPaddingCorrection, 10.0, 25.0, 25.0);
+    showPasswordButtonFrame = CGRectMake(480.0, 10.0, 25.0, 25.0);
     
     
     //FOOTER FOR SECOND SECTION
@@ -367,7 +357,7 @@ NSString *loginViewControllerRotate = @"loginViewControllerRotate";
     _txtWithLogoWhenNoURLFrame = CGRectMake(0,0,320,90);
     
     //Frame used for reconection icon
-    syncImageFrameForNoURL = CGRectMake(280.0 + leftPaddingCorrection, 5.0, 25.0, 25.0);
+    syncImageFrameForNoURL = CGRectMake(280.0, 5.0, 25.0, 25.0);
     
     
     
@@ -380,23 +370,17 @@ NSString *loginViewControllerRotate = @"loginViewControllerRotate";
     //to set the scroll
     self.tableView.contentInset = UIEdgeInsetsMake(0, 0, 170, 0);
     
-    //Padding correction in case of versions lower that iOS 7
-    float leftPaddingCorrection = 0.0;
-    if (!IS_IOS7 && !IS_IOS8) {
-        leftPaddingCorrection = - 10.0;
-    }
-    
     
 //FIRST SECTION
     
     //Frame for url field
-    _urlFrame = CGRectMake(60 + leftPaddingCorrection,14,340,20);
+    _urlFrame = CGRectMake(60,14,340,20);
     
     //Server image - User image - Password image
-     _imageTextFieldLeftFrame = CGRectMake(20.0 + leftPaddingCorrection, 10.0, 25.0, 25.0);
+     _imageTextFieldLeftFrame = CGRectMake(20.0, 10.0, 25.0, 25.0);
     
     //Refresh button
-    refreshButtonFrame = CGRectMake(420.0 + leftPaddingCorrection, 10.0, 25.0, 25.0);
+    refreshButtonFrame = CGRectMake(420.0, 10.0, 25.0, 25.0);
     
     
 //FOOTER FOR FIRST SECTION
@@ -411,10 +395,10 @@ NSString *loginViewControllerRotate = @"loginViewControllerRotate";
 //SECOND SECTION
     
     //user and password text fields frame
-    _userAndPasswordFrame = CGRectMake(60 + leftPaddingCorrection,14,340,20);
+    _userAndPasswordFrame = CGRectMake(60,14,340,20);
     
     //image about show/hide the password
-    showPasswordButtonFrame = CGRectMake(420.0 + leftPaddingCorrection, 10.0, 25.0, 25.0);
+    showPasswordButtonFrame = CGRectMake(420.0, 10.0, 25.0, 25.0);
     
 
 //FOOTER FOR SECOND SECTION
@@ -435,7 +419,7 @@ NSString *loginViewControllerRotate = @"loginViewControllerRotate";
     _txtWithLogoWhenNoURLFrame = CGRectMake(0,0,480,90);
     
     //Frame used for reconection icon
-    syncImageFrameForNoURL = CGRectMake(420.0 + leftPaddingCorrection, 5.0, 25.0, 25.0);
+    syncImageFrameForNoURL = CGRectMake(420.0, 5.0, 25.0, 25.0);
 
    
 }
@@ -446,23 +430,17 @@ NSString *loginViewControllerRotate = @"loginViewControllerRotate";
     
     self.tableView.contentInset = UIEdgeInsetsMake(0, 0, 170, 0);
     
-    //Padding correction in case of versions lower that iOS 7
-    float leftPaddingCorrection = 0.0;
-    if (!IS_IOS7 && !IS_IOS8) {
-        leftPaddingCorrection = - 10.0;
-    }
-    
     
 //FIRST SECTION
     
     //Frame for url field
-    _urlFrame = CGRectMake(60 + leftPaddingCorrection,14,430,20);
+    _urlFrame = CGRectMake(60,14,430,20);
     
     //Server image - User image - Password image
-    _imageTextFieldLeftFrame = CGRectMake(20.0 + leftPaddingCorrection, 10.0, 25.0, 25.0);
+    _imageTextFieldLeftFrame = CGRectMake(20.0, 10.0, 25.0, 25.0);
     
     //Refresh button
-    refreshButtonFrame = CGRectMake(510.0 + leftPaddingCorrection, 10.0, 25.0, 25.0);
+    refreshButtonFrame = CGRectMake(510.0, 10.0, 25.0, 25.0);
     
 
 //FOOTER FOR FIRST SECTION
@@ -478,10 +456,10 @@ NSString *loginViewControllerRotate = @"loginViewControllerRotate";
 //SECOND SECTION
     
     //user and password text fields frame
-    _userAndPasswordFrame = CGRectMake(60 + leftPaddingCorrection,14,430,20);
+    _userAndPasswordFrame = CGRectMake(60,14,430,20);
     
     //image about show/hide the password
-    showPasswordButtonFrame = CGRectMake(510.0 + leftPaddingCorrection, 10.0, 25.0, 25.0);
+    showPasswordButtonFrame = CGRectMake(510.0, 10.0, 25.0, 25.0);
     
 
 //FOOTER FOR SECOND SECTION
@@ -503,7 +481,7 @@ NSString *loginViewControllerRotate = @"loginViewControllerRotate";
     _txtWithLogoWhenNoURLFrame = CGRectMake(0,0,568,90);
     
     //Frame used for reconection icon
-    syncImageFrameForNoURL = CGRectMake(510.0 + leftPaddingCorrection, 5.0, 25.0, 25.0);
+    syncImageFrameForNoURL = CGRectMake(510.0, 5.0, 25.0, 25.0);
     
     
 }
@@ -515,24 +493,17 @@ NSString *loginViewControllerRotate = @"loginViewControllerRotate";
     [self.tableView setBackgroundView:nil];
     [self.tableView setBackgroundView:[[UIView alloc] init]];
     
-    //Padding correction in case of versions lower that iOS 7
-    float leftPaddingCorrection = 0.0;
-    
-    if (!IS_IOS7 && !IS_IOS8) {
-        leftPaddingCorrection = - 45.0;
-    }
-
     
 //FIRST SECTION
     
     //Frame for url field
-    _urlFrame = CGRectMake(280 + leftPaddingCorrection,14,420,20);
+    _urlFrame = CGRectMake(280,14,420,20);
     
     //Server image - User image - Password image
-    _imageTextFieldLeftFrame = CGRectMake(235.0 + leftPaddingCorrection, 10.0, 25.0, 25.0);
+    _imageTextFieldLeftFrame = CGRectMake(235.0, 10.0, 25.0, 25.0);
     
     //Refresh button
-    refreshButtonFrame = CGRectMake(680.0 + leftPaddingCorrection, 10.0, 25.0, 25.0);
+    refreshButtonFrame = CGRectMake(680.0, 10.0, 25.0, 25.0);
     
     
 //FOOTER FOR FIRST SECTION
@@ -547,10 +518,10 @@ NSString *loginViewControllerRotate = @"loginViewControllerRotate";
 //SECOND SECTION
     
     //user and password text fields frame
-    _userAndPasswordFrame = CGRectMake(280 + leftPaddingCorrection,14,220,20);
+    _userAndPasswordFrame = CGRectMake(280,14,220,20);
     
     //image about show/hide the password
-    showPasswordButtonFrame = CGRectMake(500.0 + leftPaddingCorrection, 10.0, 25.0, 25.0);
+    showPasswordButtonFrame = CGRectMake(500.0, 10.0, 25.0, 25.0);
     
     
 //FOOTER FOR SECOND SECTION
@@ -587,23 +558,17 @@ NSString *loginViewControllerRotate = @"loginViewControllerRotate";
     [self.tableView setBackgroundView:nil];
     [self.tableView setBackgroundView:[[UIView alloc] init]];
     
-    //Padding correction in case of versions lower that iOS 7
-    float leftPaddingCorrection = 0.0;
-    if (!IS_IOS7 && !IS_IOS8) {
-        leftPaddingCorrection = - 45.0;
-    }
-    
     
 //FIRST SECTION
     
     //Frame for url field
-    _urlFrame = CGRectMake(408.0 + leftPaddingCorrection,14,420,20);
+    _urlFrame = CGRectMake(408.0,14,420,20);
     
     //Server image - User image - Password image
-    _imageTextFieldLeftFrame = CGRectMake(368.0 + leftPaddingCorrection, 10.0, 25.0, 25.0);
+    _imageTextFieldLeftFrame = CGRectMake(368.0, 10.0, 25.0, 25.0);
     
     //Refresh button
-    refreshButtonFrame = CGRectMake(828.0 + leftPaddingCorrection, 10.0, 25.0, 25.0);
+    refreshButtonFrame = CGRectMake(828.0 , 10.0, 25.0, 25.0);
     
     
 //FOOTER FOR FIRST SECTION
@@ -619,11 +584,11 @@ NSString *loginViewControllerRotate = @"loginViewControllerRotate";
 //SECOND SECTION
     
     //user and password text fields frame
-    _userAndPasswordFrame = CGRectMake(408 + leftPaddingCorrection,14,220,20);
+    _userAndPasswordFrame = CGRectMake(408,14,220,20);
     
     
     //image about show/hide the password
-    showPasswordButtonFrame = CGRectMake(628.0 + leftPaddingCorrection, 10.0, 25.0, 25.0);
+    showPasswordButtonFrame = CGRectMake(628.0, 10.0, 25.0, 25.0);
     
     
 //FOOTER FOR SECOND SECTION
@@ -668,8 +633,7 @@ NSString *loginViewControllerRotate = @"loginViewControllerRotate";
 }
 
 //Only for ios6
-- (NSUInteger)supportedInterfaceOrientations
-{
+- (NSUInteger)supportedInterfaceOrientations {
     if (IS_IPHONE) {
         return UIInterfaceOrientationMaskAllButUpsideDown;
     }else{
@@ -1231,7 +1195,7 @@ NSString *loginViewControllerRotate = @"loginViewControllerRotate";
 -(UIView *) configureViewForFooterURLServer {
     UIView *view = [[UIView alloc] initWithFrame:textFooterFrame1];
     
-    if (!([self.auxUrlForReloadTable isEqualToString:@""] || mCheckAccessToServer.delegate == nil)) {
+    if (!([self.auxUrlForReloadTable isEqualToString:@""] || ((CheckAccessToServer *)[CheckAccessToServer sharedManager]).delegate == nil)) {
         
         UILabel *label = [self setTheDefaultStyleOfTheServerFooterLabel];
         UIImageView *errorImage;
@@ -1602,10 +1566,11 @@ NSString *loginViewControllerRotate = @"loginViewControllerRotate";
     DLog(@"6- self.urlTextField.text %@", self.urlTextField.text);
     
     if(self.urlTextField != nil) {
-        self.auxUrlForReloadTable = self.urlTextField.text;
+        NSString *urlWithoutUserPassword = [self stripUsernameAndPassword:self.urlTextField.text];
+        self.auxUrlForReloadTable = [self stripIndexPhpOrAppsFilesFromUrl:urlWithoutUserPassword];
     } else {
         //This is when we deleted the last account and go to the login screen
-        self.urlTextField = [[UITextField alloc]initWithFrame:_urlFrame];
+        self.urlTextField = [[UITextField alloc]initWithFrame:self.urlFrame];
         self.urlTextField.text = self.auxUrlForReloadTable;
         textField = self.urlTextField;
     }
@@ -1614,7 +1579,7 @@ NSString *loginViewControllerRotate = @"loginViewControllerRotate";
     self.auxPasswordForReloadTable = self.passwordTextField.text;
     
     //if it is nill the screen is not here
-    if(mCheckAccessToServer.delegate != nil) {
+    if(((CheckAccessToServer *)[CheckAccessToServer sharedManager]).delegate != nil) {
         
         //[self undoAnimateTextField:textField up:YES];
         
@@ -1690,12 +1655,58 @@ NSString *loginViewControllerRotate = @"loginViewControllerRotate";
     isCheckingTheServerRightNow = YES;
     isConnectionToServer = NO;
     
-    mCheckAccessToServer.delegate = nil;
+    [[CheckAccessToServer sharedManager] isConnectionToTheServerByUrl:[self getUrlToCheck]];
+}
+
+-(NSString *)stripIndexPhpOrAppsFilesFromUrl:(NSString *)url {
     
-    mCheckAccessToServer = [[CheckAccessToServer alloc] init];
-    mCheckAccessToServer.delegate = self;
+    NSRange range = [url rangeOfString:k_remove_to_contains_path];
     
-    [mCheckAccessToServer isConnectionToTheServerByUrl:[self getUrlToCheck]];
+    if ([url hasSuffix:k_remove_to_suffix]) {
+        url = [url substringToIndex:[url length] - [(NSString *)k_remove_to_suffix length]];
+        self.urlTextField.text = url;
+    } else if (range.length > 0) {
+        url = [url substringToIndex:range.location];
+        self.urlTextField.text = url;
+    }
+    
+    return url;
+}
+
+- (NSString *)stripUsernameAndPassword:(NSString *)url {
+    
+    NSString *fakeUrl = url;
+    
+    //fake url to compose full url propertly without use getUrlToCheck to compose components propertly
+    if (!([url hasPrefix:k_https_prefix] || [url hasPrefix:k_http_prefix])) {
+        fakeUrl = [NSString stringWithFormat:@"%@%@",k_https_prefix ,url];
+    }
+    
+    NSURLComponents *components = [NSURLComponents componentsWithString:fakeUrl];
+    
+    // if user component was set on the server URL, move it to the user field
+    if(components.user.length > 0) {
+        [self.usernameTextField setText:components.user];
+    }
+    
+    // if password component was set on the server URL, move it to the password field
+    if(components.password.length > 0) {
+        [self.passwordTextField setText:components.password];
+    }
+    
+    if (components.user.length > 0 || components.password.length >0) {
+        
+        components.user = nil;
+        components.password = nil;
+        
+        NSString *fullURLWithoutUsernamePassword = [self.urlTextField.text substringFromIndex:[self.urlTextField.text rangeOfString: @"@"].location+1];
+        
+        url = fullURLWithoutUsernamePassword;
+        
+        [self.urlTextField setText:url];
+    }
+    
+    return url;
 }
 
 -(NSString *)getUrlToCheck {
@@ -1821,7 +1832,7 @@ NSString *loginViewControllerRotate = @"loginViewControllerRotate";
         
         if (isHttps && ![self.urlTextField.text hasPrefix:k_https_prefix]) {
             DLog(@"es HTTPS no hay conexión");
-            [mCheckAccessToServer isConnectionToTheServerByUrl:[self getUrlToCheck]];
+            [[CheckAccessToServer sharedManager] isConnectionToTheServerByUrl:[self getUrlToCheck]];
             
         } else {
             UIImage *currentImage = [UIImage imageNamed: @"CredentialsError.png"];
@@ -1893,7 +1904,6 @@ NSString *loginViewControllerRotate = @"loginViewControllerRotate";
     
     NSString *connectURL =[NSString stringWithFormat:@"%@%@%@",httpOrHttps,[self getUrlChecked: _urlTextField.text], k_url_webdav_server];
     _connectString=connectURL;
-   
 }
 
 
@@ -1938,14 +1948,7 @@ NSString *loginViewControllerRotate = @"loginViewControllerRotate";
     [[AppDelegate sharedOCCommunication] checkServer:_connectString onCommunication:[AppDelegate sharedOCCommunication] successRequest:^(NSHTTPURLResponse *response, NSString *redirectedServer) {
         
         BOOL isInvalid = NO;
-        
-        if (k_is_sso_active == YES) {
-            isInvalid = NO;
-            isLoginButtonEnabled = YES;
-        } else {
-            //Unkown, must be invalid
-            isInvalid = YES;
-        }
+        isLoginButtonEnabled = YES;
         
         //Update the interface depend of if isInvalid or not
         if (isInvalid) {
@@ -1959,7 +1962,7 @@ NSString *loginViewControllerRotate = @"loginViewControllerRotate";
         
         [_tableView reloadData];
         [self updateInterfaceWithConnectionToTheServer:YES];
-    } failureRequest:^(NSHTTPURLResponse *response, NSError *error) {
+    } failureRequest:^(NSHTTPURLResponse *response, NSError *error, NSString *redirectedServer) {
         
         BOOL isInvalid = NO;
         
@@ -2062,8 +2065,6 @@ NSString *loginViewControllerRotate = @"loginViewControllerRotate";
     
     [[AppDelegate sharedOCCommunication] setUserAgent:[UtilsUrls getUserAgent]];
     
-    
-    
      [[AppDelegate sharedOCCommunication] readFolder:_connectString withUserSessionToken:nil onCommunication:[AppDelegate sharedOCCommunication] successRequest:^(NSHTTPURLResponse *response, NSArray *items, NSString *redirectedServer, NSString *token){
         
         DLog(@"Operation response code: %ld", (long)response.statusCode);
@@ -2092,7 +2093,7 @@ NSString *loginViewControllerRotate = @"loginViewControllerRotate";
             NSMutableArray *directoryList = [UtilsDtos passToFileDtoArrayThisOCFileDtoArray:items];
             [self createUserAndDataInTheSystemWithRequest:directoryList andCode:response.statusCode];
         }
-    } failureRequest:^(NSHTTPURLResponse *response, NSError *error, NSString *token) {
+    } failureRequest:^(NSHTTPURLResponse *response, NSError *error, NSString *token, NSString *redirectedServer) {
         
         DLog(@"error: %@", error);
         DLog(@"Operation error: %ld", (long)response.statusCode);
@@ -2341,7 +2342,6 @@ NSString *loginViewControllerRotate = @"loginViewControllerRotate";
  * This method checks the URL in URLTextField in order to know if
  * is a valid SSO server.
  *
- * @warning This method uses a NSURLConnection delegate methods
  */
 
 -(void) checkURLServerForSSO {

@@ -14,6 +14,7 @@
  */
 
 #import <Foundation/Foundation.h>
+#import "CapabilitiesDto.h"
 
 typedef enum {
     serverFunctionalityNotChecked = 0,
@@ -21,6 +22,11 @@ typedef enum {
     serverFunctionalityNotSupported = 2
     
 } enumHasShareApiSupport;
+
+typedef enum {
+    sortByName = 0,
+    sortByModificationDate = 1
+} enumSortingType;
 
 @interface UserDto : NSObject
 
@@ -33,12 +39,18 @@ typedef enum {
 @property long storageOccupied;
 @property long storage;
 @property NSInteger hasShareApiSupport;
+@property NSInteger hasShareeApiSupport;
 @property NSInteger hasCookiesSupport;
 @property NSInteger hasForbiddenCharactersSupport;
+@property NSInteger hasCapabilitiesSupport;
+@property NSInteger hasFedSharesOptionShareSupport;
 @property BOOL instantUpload;
+@property BOOL backgroundInstantUpload;
 @property (nonatomic, copy) NSString *pathInstantUpload;
 @property BOOL onlyWifiInstantUpload;
-@property long dateInstantUpload;
+@property NSTimeInterval timestampInstantUpload;
 @property (nonatomic, copy) NSString *urlRedirected;
+@property (nonatomic, strong) CapabilitiesDto *capabilitiesDto;
+@property enumSortingType sortingType;
 
 @end

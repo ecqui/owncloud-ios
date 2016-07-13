@@ -47,7 +47,9 @@ import AVFoundation
             
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, Int64(delay * Double(NSEC_PER_SEC))), dispatch_get_main_queue()) { () -> Void in
                 self.showPasscode()
-               
+                if ManageAppSettingsDB.isTouchID(){
+                    ManageTouchID.sharedSingleton().showTouchIDAuth()
+                }
             }
             
             delay = delay * 2
@@ -104,14 +106,16 @@ import AVFoundation
         let rightBarButton = UIBarButtonItem (title:NSLocalizedString("upload_label", comment: ""), style: .Plain, target: self, action:"sendTheFilesToOwnCloud")
         let leftBarButton = UIBarButtonItem (title:NSLocalizedString("cancel", comment: ""), style: .Plain, target: self, action:"cancelView")
         
-        self.navigationItem.title = k_app_name
+        let appName = NSBundle.mainBundle().infoDictionary?["CFBundleDisplayName"] as! String
+
+        self.navigationItem.title = appName
 
         
         self.navigationItem.leftBarButtonItem = leftBarButton
         self.navigationItem.rightBarButtonItem = rightBarButton
         self.navigationItem.hidesBackButton = true
         
-        self.changeTheDestinyFolderWith(k_app_name)
+        self.changeTheDestinyFolderWith(appName)
 
 
     }
@@ -121,7 +125,8 @@ import AVFoundation
         var nameFolder = folder
         let location = NSLocalizedString("location", comment: "comment")
         if folder.isEmpty {
-            nameFolder = k_app_name
+            let appName = NSBundle.mainBundle().infoDictionary?["CFBundleDisplayName"] as! String
+            nameFolder = appName
         }
 
         if (nameFolder.characters.count > 20) {
@@ -263,9 +268,9 @@ import AVFoundation
             self.presentViewController(navigation, animated: true) { () -> Void in
                 print("select folder presented")
                 //We check the connection here because we need to accept the certificate on the self signed server
-                let mCheckAccessToServer = CheckAccessToServer()
-                mCheckAccessToServer.delegate = selectFolderViewController
-                mCheckAccessToServer.isConnectionToTheServerByUrl(activeUser.url)
+                (CheckAccessToServer.sharedManager() as? CheckAccessToServer)!.delegate = selectFolderViewController
+                (CheckAccessToServer.sharedManager() as? CheckAccessToServer)!.viewControllerToShow = selectFolderViewController
+                CheckAccessToServer.sharedManager().isConnectionToTheServerByUrl(activeUser.url)
             }
         } else {
             showAlertView(NSLocalizedString("error_login_doc_provider", comment: ""))

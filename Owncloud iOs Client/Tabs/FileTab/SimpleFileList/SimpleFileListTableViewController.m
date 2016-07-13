@@ -32,6 +32,7 @@
 #import "UtilsUrls.h"
 #import "FileListDBOperations.h"
 #import "UIColor+Constants.h"
+#import "SortManager.h"
 
 #ifdef CONTAINER_APP
 #import "AppDelegate.h"
@@ -98,58 +99,50 @@
     [self reloadFolderByEtag];
 }
 
+- (void)viewDidDisappear:(BOOL)animated {
+    [super viewDidDisappear:animated];
+    
+    //Cancel all the get thumbnails in visible cells
+    UITableView *tableView = self.tableView; // Or however you get your table view
+    NSArray *paths = [tableView indexPathsForVisibleRows];
+    
+    for (NSIndexPath *path in paths) {
+        [self cancelGetThumbnailByCell:[tableView cellForRowAtIndexPath:path]];
+    }
+}
+
 #pragma mark - Fill the arrays from Database
 
 - (void) fillTheArraysFromDatabase {
     
     self.currentDirectoryArray = [ManageFilesDB getFilesByFileIdForActiveUser: (int)self.currentFolder.idFile];
-    self.sortedArray = [self partitionObjects:self.currentDirectoryArray collationStringSelector:@selector(fileName)];
+    self.sortedArray = [SortManager getSortedArrayFromCurrentDirectoryArray:self.currentDirectoryArray forUser:self.user];
 }
+
+
 
 #pragma mark - TableView dataSource
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-    //If the _currentDirectoryArray doesn't have object it will have one section
-    NSInteger sections = 1;
-    if ([_currentDirectoryArray count] > 0) {
-        sections = [[[UILocalizedIndexedCollation currentCollation] sectionTitles] count];
-    }
-    return sections;
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView
+{
+    return [SortManager numberOfSectionsInTableViewForUser:self.user withFolderList:self.currentDirectoryArray];
 }
 
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    //If the _currentDirectoryArray doesn't have object it will have one row
-    NSInteger rows = 1;
-    if ([_currentDirectoryArray count] > 0) {
-        rows = [[_sortedArray objectAtIndex:section] count];
-    }
-    return rows;
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
+{
+    return [SortManager numberOfRowsInSection:section forUser:self.user withCurrentDirectoryArray:self.currentDirectoryArray andSortedArray:self.sortedArray needsExtraEmptyRow:YES];
 }
 
 // Returns the table view managed by the controller object.
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section
 {
-    //Only show the section title if there are rows in it
-    BOOL showSection = [[_sortedArray objectAtIndex:section] count] != 0;
-    NSArray *titles = [[UILocalizedIndexedCollation currentCollation] sectionTitles];
-    
-    if(k_minimun_files_to_show_separators > [_currentDirectoryArray count]) {
-        showSection = NO;
-    }
-    return (showSection) ? [titles objectAtIndex:section] : nil;
+    return [SortManager titleForHeaderInTableViewSection:section forUser:self.user withCurrentDirectoryArray:self.currentDirectoryArray andSortedArray:self.sortedArray];
 }
 
 // Asks the data source to return the titles for the sections for a table view.
 - (NSArray *)sectionIndexTitlesForTableView:(UITableView *)tableView
 {
-    // The commented part is for the version with searchField
-    
-    if(k_minimun_files_to_show_separators > [_currentDirectoryArray count]) {
-        return nil;
-    } else {
-        tableView.sectionIndexColor = [UIColor colorOfSectionIndexColorFileList];
-        return [[UILocalizedIndexedCollation currentCollation] sectionIndexTitles];
-    }
+    return [SortManager sectionIndexTitlesForTableView:tableView forUser:self.user withCurrentDirectoryArray:self.currentDirectoryArray];
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -218,7 +211,7 @@
             fileDateString = @"";
         }
         
-        //Add a FileDownloadedIcon.png in the left of cell when the file is in device
+        
         if (![file isDirectory]) {
             //Is file
             //Font for file
@@ -269,7 +262,10 @@
             fileCell.labelInfoFile.text = [NSString stringWithFormat:@"%@", fileDateString];
         }
         
-        fileCell = [InfoFileUtils getTheStatusIconOntheFile:file onTheCell:fileCell andCurrentFolder:self.currentFolder];
+        fileCell = [InfoFileUtils getTheStatusIconOntheFile:file onTheCell:fileCell andCurrentFolder:self.currentFolder andIsSonOfFavoriteFolder:NO ofUser:self.user];
+        
+        //Thumbnail
+        fileCell.thumbnailSessionTask = [InfoFileUtils updateThumbnail:file andUser:self.user tableView:tableView cellForRowAtIndexPath:indexPath];
         
         //Custom cell for SWTableViewCell with right swipe options
         fileCell.containingTableView = tableView;
@@ -301,37 +297,28 @@
     
 }
 
-/*
- * Method that sorts alphabetically array by selector
- *@array -> array of sections and rows of tableview
- */
-- (NSArray *)partitionObjects:(NSArray *)array collationStringSelector:(SEL)selector {
-    UILocalizedIndexedCollation *collation = [UILocalizedIndexedCollation currentCollation];
-    
-    NSInteger sectionCount = [[collation sectionTitles] count]; //section count is take from sectionTitles and not sectionIndexTitles
-    NSMutableArray *unsortedSections = [NSMutableArray arrayWithCapacity:sectionCount];
-    
-    //create an array to hold the data for each section
-    for(int i = 0; i < sectionCount; i++) {
-        [unsortedSections addObject:[NSMutableArray array]];
-    }
-    //put each object into a section
-    for (id object in array) {
-        NSInteger index = [collation sectionForObject:object collationStringSelector:selector];
-        [[unsortedSections objectAtIndex:index] addObject:object];
-    }
-    NSMutableArray *sections = [NSMutableArray arrayWithCapacity:sectionCount];
-    
-    //sort each section
-    for (NSMutableArray *section in unsortedSections) {
-        [sections addObject:[collation sortedArrayFromArray:section collationStringSelector:selector]];
-    }
-    
-    return sections;
-}
-
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     //Method to be overwritten
+}
+
+- (void) tableView:(UITableView *)tableView didEndDisplayingCell:(UITableViewCell *)cell forRowAtIndexPath:(NSIndexPath *)indexPath {
+    [self cancelGetThumbnailByCell:cell];
+}
+
+- (void) cancelGetThumbnailByCell:(UITableViewCell *) cell {
+    @try {
+        CustomCellFileAndDirectory *customCell = (CustomCellFileAndDirectory *) cell;
+        
+        if ([customCell isKindOfClass:[CustomCellFileAndDirectory class]] && customCell.thumbnailSessionTask) {
+            DLog(@"Cancel thumbnailSessionTask");
+            [customCell.thumbnailSessionTask cancel];
+        }
+    }
+    @catch (NSException *exception) {
+        DLog(@"Exception: %@", exception);
+    }
+    @finally {
+    }
 }
 
 #pragma mark - Navigation
@@ -385,10 +372,6 @@
     
      [sharedCommunication readFolder:remotePath withUserSessionToken:nil onCommunication:sharedCommunication successRequest:^(NSHTTPURLResponse *response, NSArray *items, NSString *redirectedServer, NSString *token) {
         
-        for (OCFileDto *file in items) {
-            DLog(@"File: %@", file.fileName);
-        }
-        
         DLog(@"Operation response code: %d", (int)response.statusCode);
         BOOL isSamlCredentialsError=NO;
         
@@ -432,7 +415,12 @@
             [FileListDBOperations makeTheRefreshProcessWith:directoryList inThisFolder:file.idFile];
             
             //Send the data to DB and refresh the table
-            [self deleteOldDataFromDBBeforeRefresh:directoryList ofFolder:file];
+            
+            //This process can not be executed twice at the same time
+            if (self.isRefreshInProgress == NO) {
+                self.isRefreshInProgress=YES;
+                [InfoFileUtils createAllFoldersInFileSystemByFileDto:file andUserDto:self.user];
+            }
             
             if (isNecessaryNavigate) {
                 
@@ -454,51 +442,31 @@
             [self stopPullRefresh];
         }
         
-    } failureRequest:^(NSHTTPURLResponse *response, NSError *error, NSString *token) {
+     } failureRequest:^(NSHTTPURLResponse *response, NSError *error, NSString *token, NSString *redirectedServer) {
         
         DLog(@"response: %@", response);
         DLog(@"error: %@", error);
-        
+         
         [self endLoading];
         [self stopPullRefresh];
-        
-        [self.manageNetworkErrors manageErrorHttp:response.statusCode andErrorConnection:error andUser:self.user];
+         
+        BOOL isSamlCredentialsError = NO;
+         
+        //Check the login error in shibboleth
+        if (k_is_sso_active && redirectedServer) {
+            //Check if there are fragmens of saml in url, in this case there are a credential error
+            isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:redirectedServer];
+            if (isSamlCredentialsError) {
+                [self errorLogin];
+            }
+        }
+        if (!isSamlCredentialsError) {
+            [self.manageNetworkErrors manageErrorHttp:response.statusCode andErrorConnection:error andUser:self.user];
+        }
+  
     }];
 }
 
-/*
- * This method receive the new array of the server and store the changes
- * in the Database and in the tableview
- * @param requestArray -> NSArray of path items
- */
--(void)deleteOldDataFromDBBeforeRefresh:(NSArray *) requestArray ofFolder:(FileDto *) file {
-    
-    //This process can not be executed twice at the same time
-    if (self.isRefreshInProgress == NO) {
-        self.isRefreshInProgress=YES;
-        
-        NSMutableArray *directoryList = [NSMutableArray arrayWithArray:requestArray];
-        
-        //Change the filePath from the library to our format
-        for (FileDto *currentFile in directoryList) {
-            //Remove part of the item file path
-            NSString *partToRemove = [UtilsUrls getRemovedPartOfFilePathAnd:self.user];
-            if([currentFile.filePath length] >= [partToRemove length]){
-                currentFile.filePath = [currentFile.filePath substringFromIndex:[partToRemove length]];
-            }
-        }
-        
-        NSArray *listOfRemoteFilesAndFolders = [ManageFilesDB getFilesByFileIdForActiveUser:(int) self.currentFolder.idFile];
-        
-        for (FileDto *current in listOfRemoteFilesAndFolders) {
-            DLog(@"current: %@", current.fileName);
-        }
-        
-        NSString *path = [UtilsUrls getLocalFolderByFilePath:file.filePath andFileName:file.fileName andUserDto:self.user];
-        
-        [FileListDBOperations createAllFoldersByArrayOfFilesDto:listOfRemoteFilesAndFolders andLocalFolder:path];
-    }
-}
 
 #pragma mark Loading view methods
 
@@ -732,10 +700,19 @@
                 }
                 
             }
-        } failureRequest:^(NSHTTPURLResponse *response, NSError *error) {
+        } failureRequest:^(NSHTTPURLResponse *response, NSError *error, NSString *redirectedServer) {
             
             DLog(@"error: %@", error);
             DLog(@"Operation error: %d", (int) response.statusCode);
+        
+            //Check the login error in shibboleth
+            if (k_is_sso_active && redirectedServer) {
+                //Check if there are fragmens of saml in url, in this case there are a credential error
+                if ([FileNameUtils isURLWithSamlFragment:redirectedServer]) {
+                    [self errorLogin];
+                }
+            }
+            
         }];
     }
 }
@@ -748,10 +725,9 @@
 
 -(void)repeatTheCheckToTheServer {
     //We check the connection here because we need to accept the certificate on the self signed server before go to the files tab
-    CheckAccessToServer *mCheckAccessToServer = [[CheckAccessToServer alloc] init];
-    mCheckAccessToServer.viewControllerToShow = self;
-    mCheckAccessToServer.delegate = self;
-    [mCheckAccessToServer isConnectionToTheServerByUrl:self.user.url];
+    ((CheckAccessToServer *)[CheckAccessToServer sharedManager]).delegate = self;
+    ((CheckAccessToServer *)[CheckAccessToServer sharedManager]).viewControllerToShow = self;
+    [[CheckAccessToServer sharedManager] isConnectionToTheServerByUrl:self.user.url];
 }
 
 -(void)badCertificateNoAcceptedByUser {

@@ -32,7 +32,7 @@
  * Method that give all folders from a single folder
  * @fileId -> id of the folder father and we want all his files and folders
  */
-+ (NSMutableArray *) getFoldersByFileIdForActiveUser:(int) fileId;
++ (NSMutableArray *) getFoldersByFileIdForActiveUser:(NSInteger) fileId;
 
 ///-----------------------------------
 /// @name Get Files by idFile
@@ -185,6 +185,11 @@
  * Method to delete localy the files that was deleted from other App
  */
 + (void) deleteAllFilesAndFoldersThatNotExistOnServerFromBackup;
+
+/*
+ * Method to delete the thumbnails not updated after a refresh
+ */
++(void) deleteAllThumbnailsWithDifferentEtagFromBackup;
 
 /*
  * Method to update the Favorite files from the backup after refresh
@@ -421,10 +426,11 @@
  * This method get all the file where the download status is equal to status
  *
  * @param NSInteger -> The download status
+ * @param UserDto -> user
  *
  * @return NSMutableArray -> The array with the files
  */
-+ (NSMutableArray *) getFilesByDownloadStatus:(NSInteger) status;
++ (NSMutableArray *) getFilesByDownloadStatus:(NSInteger) status andUser:(UserDto *) user;
 
 
 
@@ -483,7 +489,6 @@
  */
 + (void) setUnShareFilesOfFolder:(FileDto *) folder;
 
-
 #pragma mark - Favorite methods
 
 ///-----------------------------------
@@ -499,7 +504,7 @@
 + (void) updateTheFileID: (NSInteger)idFile asFavorite: (BOOL) isFavorite;
 
 ///-----------------------------------
-/// @name getAllFavoritesOfUserId:userId
+/// @name getAllFavoritesFilesOfUserId:userId
 ///-----------------------------------
 
 /**
@@ -509,8 +514,32 @@
  *
  * @return NSArray -> Array of favorites items
  */
-+ (NSArray*) getAllFavoritesOfUserId:(NSInteger)userId;
++ (NSArray*) getAllFavoritesFilesOfUserId:(NSInteger)userId;
 
+///-----------------------------------
+/// @name getAllFavoritesByFolder:userId
+///-----------------------------------
+
+/**
+ * This method returned all favorites files of a specific user
+ *
+ * @param folder -> FolderDto
+ *
+ * @return NSArray -> Array of favorites items
+ */
++ (NSArray*) getAllFavoritesByFolder:(FileDto *) folder;
+
+///-----------------------------------
+/// @name setNoFavoritesAllFilesOfAFolder
+///-----------------------------------
+
+/**
+ * This method set all files and folders of a folder as no favorite
+ *
+ * @param folder -> FolderDto
+ *
+ */
++ (void) setNoFavoritesAllFilesOfAFolder:(FileDto *) folder;
 
 #pragma mark - TaskIdentifier methods
 
