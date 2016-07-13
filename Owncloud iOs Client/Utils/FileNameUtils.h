@@ -16,6 +16,7 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import <AssetsLibrary/AssetsLibrary.h>
+#import <Photos/Photos.h>
 
 typedef NS_ENUM (NSInteger, kindOfFileEnum){
     imageFileType = 0,
@@ -72,6 +73,12 @@ typedef NS_ENUM (NSInteger, kindOfFileEnum){
  * @fileName -> file name
  */
 + (BOOL)isOfficeSupportedThisFile:(NSString*)fileName;
+
+/*
+ * Method to know if the file is an edit file supported by the system for the moment.
+ * @fileName -> file name
+ */
++ (BOOL)isEditTextViewSupportedThisFile:(NSString*)fileName;
 
 /*
  * Method to know if the image file can be scaled.
@@ -180,5 +187,12 @@ typedef NS_ENUM (NSInteger, kindOfFileEnum){
  */
 + (NSString *)getComposeNameFromPath:(NSString *) path;
 
+///-----------------------------------
+/// @name getComposeNameFromPHAsset
+///-----------------------------------
+/*
+ Method to generate the name of the file depending if it is a video or an image
+ */
++ (NSString *)getComposeNameFromPHAsset:(PHAsset *)asset;
 
 @end

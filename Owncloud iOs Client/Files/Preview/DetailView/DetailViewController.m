@@ -43,15 +43,9 @@
 #import "DownloadUtils.h"
 #import "ManageCapabilitiesDB.h"
 #import "DownloadFileSyncFolder.h"
+#import "EditFileViewController.h"
+#import "UtilsNotifications.h"
 
-
-NSString * IpadFilePreviewViewControllerFileWasDeletedNotification = @"IpadFilePreviewViewControllerFileWasDeletedNotification";
-NSString * IpadFilePreviewViewControllerFileWasDownloadNotification = @"IpadFilePreviewViewControllerFileWasDownloadNotification";
-NSString * IpadFilePreviewViewControllerFileWhileDonwloadingNotification = @"IpadFilePreviewViewControllerFileWhileDonwloadingNotification";
-NSString * IpadFilePreviewViewControllerFileFinishDownloadNotification = @"IpadFilePreviewViewControllerFileFinishDownloadNotification";
-NSString * IpadSelectRowInFileListNotification = @"IpadSelectRowInFileListNotification";
-NSString * IpadCleanPreviewNotification = @"IpadCleanPreviewNotification";
-NSString * IpadShowNotConnectionWithServerMessageNotification = @"IpadShowNotConnectionWithServerMessageNotification";
 
 #define k_delta_width_for_split_transition 320.0
 #define k_delta_height_toolBar_split_transition 64.0
@@ -108,11 +102,11 @@ NSString * IpadShowNotConnectionWithServerMessageNotification = @"IpadShowNotCon
     [_favoriteButtonBar setImageInsets:UIEdgeInsetsMake(10, 0, -10, 0)];
     [_shareLinkButtonBar setImageInsets:UIEdgeInsetsMake(10, 0, -10, 0)];
     [_deleteButtonBar setImageInsets:UIEdgeInsetsMake(10, 0, -10, 0)];
+    [_editButtonBar setImageInsets:UIEdgeInsetsMake(10, 0, -10, 0)];
     
     //Set Constraints
     _topMarginTitleLabelConstraint.constant = 32;
     _progressViewHeightConstraint.constant = 2;
-    _fileTypeCenterHeightConstraint.constant = -40;
     
     
     [self.view setNeedsLayout];
@@ -121,6 +115,7 @@ NSString * IpadShowNotConnectionWithServerMessageNotification = @"IpadShowNotCon
     //Set title and the font of the label of the toolBar
     [_titleLabel setFont:[UIFont systemFontOfSize:18.0]];
     [_titleLabel setText:@""];
+    [_titleLabel setTextColor:[UIColor colorOfNavigationTitle]];
     
     //Set color of background
     self.view.backgroundColor = [UIColor colorOfBackgroundDetailViewiPad];
@@ -184,7 +179,7 @@ NSString * IpadShowNotConnectionWithServerMessageNotification = @"IpadShowNotCon
         [items insertObject:_favoriteButtonBar atIndex:3];
         [items insertObject:_spaceBar2 atIndex:4];
         
-        if ((k_hide_share_options) || (APP_DELEGATE.activeUser.hasCapabilitiesSupport && APP_DELEGATE.activeUser.capabilitiesDto && !APP_DELEGATE.activeUser.capabilitiesDto.isFilesSharingAPIEnabled)) {
+        if ((k_hide_share_options) || (APP_DELEGATE.activeUser.hasCapabilitiesSupport == serverFunctionalitySupported && APP_DELEGATE.activeUser.capabilitiesDto && !APP_DELEGATE.activeUser.capabilitiesDto.isFilesSharingAPIEnabled)) {
              [items insertObject:_deleteButtonBar atIndex:5];
         }else{
             [items insertObject:_shareLinkButtonBar atIndex:5];
@@ -192,9 +187,23 @@ NSString * IpadShowNotConnectionWithServerMessageNotification = @"IpadShowNotCon
             [items insertObject:_deleteButtonBar atIndex:7];
         }
     }
+    
+    
+
+    if ([FileNameUtils isEditTextViewSupportedThisFile:self.file.fileName]) {
+        [items insertObject:_spaceBar4 atIndex:8];
+        [items insertObject:_editButtonBar atIndex:9];
+        _titleLabelMarginRightConstraint.constant = 260;
+        _updatingProgressMarginUpdatingRightConstraint.constant = 260;
+    } else {
+        _titleLabelMarginRightConstraint.constant = 210;
+        _updatingProgressMarginUpdatingRightConstraint.constant = 210;
+    }
+    
     [toolbar setItems:items animated:YES];
     
 }
+
 
 - (CGRect) getTheCorrectSize{
     
@@ -395,7 +404,7 @@ NSString * IpadShowNotConnectionWithServerMessageNotification = @"IpadShowNotCon
             }];
             
             //Check to know if it's in progress
-            if ((download && [download.operation isExecuting]) || (download && download.downloadTask && download.downloadTask.state == NSURLSessionTaskStateRunning) ) {
+            if (download && download.downloadTask && download.downloadTask.state == NSURLSessionTaskStateRunning) {
                 [self contiueDownloadIfTheFileisDownloading];
             }else{
                 [self restartTheDownload];
@@ -673,10 +682,10 @@ NSString * IpadShowNotConnectionWithServerMessageNotification = @"IpadShowNotCon
 - (void) putTheFavoriteStatus {
     if (_file.isFavorite || [DownloadUtils isSonOfFavoriteFolder:self.file]) {
         //Change the image to unstarred
-        _favoriteButtonBar.image = [UIImage imageNamed:@"favoriteTB-filled"];
+        _favoriteButtonBar.image = [UIImage imageNamed:@"available_offline_TB-filled"];
     } else {
         //Change the image to starred
-        _favoriteButtonBar.image = [UIImage imageNamed:@"favoriteTB"];
+        _favoriteButtonBar.image = [UIImage imageNamed:@"available_offline_TB"];
     }
 }
 
@@ -707,7 +716,14 @@ NSString * IpadShowNotConnectionWithServerMessageNotification = @"IpadShowNotCon
     
     [toolbar addSubview:_updatingFileView];
     
-    [self performSelector:@selector(showTextInStatusBar) withObject:nil afterDelay:1.0];
+    [self showTextInStatusBar];
+    
+    if(k_is_text_status_bar_white){
+        [_updatingCancelButton setImage:[UIImage imageNamed:@"cancel_download_white.png"] forState:UIControlStateNormal];
+    }
+    else{
+        [_updatingCancelButton setImage:[UIImage imageNamed:@"cancel_download.png"] forState:UIControlStateNormal];
+    }
 }
 
 
@@ -999,17 +1015,17 @@ NSString * IpadShowNotConnectionWithServerMessageNotification = @"IpadShowNotCon
     _file = [ManageFilesDB getFileDtoByFileName:_file.fileName andFilePath:[UtilsUrls getFilePathOnDBByFilePathOnFileDto:_file.filePath andUser:app.activeUser] andUser:app.activeUser];
     
     if ([DownloadUtils isSonOfFavoriteFolder:self.file]) {
-        [self showAlertView:NSLocalizedString(@"parent_folder_is_favorite", nil)];
+        [self showAlertView:NSLocalizedString(@"parent_folder_is_available_offline_file_child", nil)];
     } else {
         if (_file.isFavorite) {
             _file.isFavorite = NO;
             //Change the image to unstarred
-            _favoriteButtonBar.image = [UIImage imageNamed:@"favoriteTB"];
+            _favoriteButtonBar.image = [UIImage imageNamed:@"available_offline_TB"];
         } else {
             _file.isFavorite = YES;
             _isCancelDownloadClicked = NO;
             //Change the image to starred
-            _favoriteButtonBar.image = [UIImage imageNamed:@"favoriteTB-filled"];
+            _favoriteButtonBar.image = [UIImage imageNamed:@"available_offline_TB-filled"];
             //Download the file if it's not downloaded and not pending to be download
             [self downloadTheFileIfIsnotDownloadingInOtherProcess];
         }
@@ -1116,6 +1132,23 @@ NSString * IpadShowNotConnectionWithServerMessageNotification = @"IpadShowNotCon
     
     _isViewBlocked = NO;
     [self unBlockFileList];
+}
+
+
+- (IBAction)didPressEditButton:(id)sender
+{
+    if (self.file.isDownload == downloaded && !self.isDownloading) {
+        EditFileViewController *viewController = [[EditFileViewController alloc] initWithFileDto:self.file andModeEditing:YES];
+        OCNavigationController *navController = [[OCNavigationController alloc] initWithRootViewController:viewController];
+        navController.navigationBar.translucent = NO;
+        
+        navController.modalPresentationStyle = UIModalPresentationFormSheet;
+        [self presentViewController:navController animated:YES completion:nil];
+        
+    } else {
+        [self showAlertView:NSLocalizedString(@"no_file_downloaded", nil)];
+    }
+
 }
 
 
@@ -1779,8 +1812,8 @@ NSString * IpadShowNotConnectionWithServerMessageNotification = @"IpadShowNotCon
 
 - (void) setNotificationForCommunicationBetweenViews {
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(updatePreviewOverwriteFile:) name:PreviewFileNotification object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(updatePreviewFileWithNewIDFromDB:) name:uploadOverwriteFileNotification object:nil];
-    [[NSNotificationCenter defaultCenter]addObserver:self selector:@selector(updatePreviewFileWithNewIdFromDBWhenAFileISDelete:) name:fileDeleteInAOverwriteProcess object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(updatePreviewFileWithNewIDFromDB:) name:UploadOverwriteFileNotification object:nil];
+    [[NSNotificationCenter defaultCenter]addObserver:self selector:@selector(updatePreviewFileWithNewIdFromDBWhenAFileISDelete:) name:FileDeleteInAOverwriteProcess object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(cleanView) name:IpadCleanPreviewNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(showNotConnectionWithServerMessage) name:IpadShowNotConnectionWithServerMessageNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(reloadFileInView:) name:PreviewFileNotificationUpdated object:nil];
@@ -1865,13 +1898,20 @@ NSString * IpadShowNotConnectionWithServerMessageNotification = @"IpadShowNotCon
  */
 - (void) showTextInStatusBar {
     
-    if (_isDownloading && _updatingFileView.hidden == NO && nameFileToUpdate == _file.fileName) {
+    if ([self isDownloadingImageOrFile] && _updatingFileView.hidden == NO && nameFileToUpdate == _file.fileName) {
         DLog(@"Show a notification text in the status bar");
         //Notificacion style
-        _notification.notificationLabelBackgroundColor = [UIColor whiteColor];
-        _notification.notificationLabelTextColor = [UIColor colorOfNavigationBar];
+        _notification.notificationLabelBackgroundColor = [[UIColor colorOfNavigationBar] colorWithAlphaComponent:1.0f];
         _notification.notificationAnimationInStyle = CWNotificationAnimationStyleTop;
         _notification.notificationAnimationOutStyle = CWNotificationAnimationStyleTop;
+        
+        if(k_is_text_status_bar_white) {
+            _notification.notificationLabelTextColor = [UIColor whiteColor];
+        }
+        else {
+            _notification.notificationLabelTextColor = [UIColor blackColor];
+        }
+        
         //File name
         NSString *notificationText = [NSString stringWithFormat:@"%@ %@", NSLocalizedString(@"updating", nil), [nameFileToUpdate stringByReplacingPercentEscapesUsingEncoding:NSUTF8StringEncoding]];
         DLog(@"name: %@",notificationText);
@@ -1879,7 +1919,13 @@ NSString * IpadShowNotConnectionWithServerMessageNotification = @"IpadShowNotCon
     }
 }
 
+- (BOOL) isDownloadingImageOrFile {
 
+    if ((self.galleryView != nil && [self.galleryView isCurrentImageDownloading]) || (self.galleryView == nil && self.isDownloading)) {
+        return YES;
+    }
+    return NO;
+}
 
 ///-----------------------------------
 /// @name Stop notification in status bar
@@ -2209,13 +2255,11 @@ NSString * IpadShowNotConnectionWithServerMessageNotification = @"IpadShowNotCon
         toolBarTopMargin.constant = -deltaHeigh;
         _topMarginUpdatingFileProgressView.constant = -deltaHeigh;
         _topMarginTitleLabelConstraint.constant = -deltaHeigh;
-        toolBarHeight.constant = -deltaHeigh;
         _toolBarHeightConstraint.constant = -deltaHeigh;
     }else{
         toolBarTopMargin.constant = 0;
         _topMarginUpdatingFileProgressView.constant = 10;
         _topMarginTitleLabelConstraint.constant = k_delta_height_toolBar_split_transition/2;
-        toolBarHeight.constant = 0;
         _toolBarHeightConstraint.constant = k_delta_height_toolBar_split_transition;
     }
     
@@ -2348,10 +2392,10 @@ NSString * IpadShowNotConnectionWithServerMessageNotification = @"IpadShowNotCon
 - (void)updateFavoriteIconWhenAFolderIsSelectedFavorite {
     if ([DownloadUtils isSonOfFavoriteFolder:self.file]) {
         //Change the image to unstarred
-        _favoriteButtonBar.image = [UIImage imageNamed:@"favoriteTB-filled"];
+        _favoriteButtonBar.image = [UIImage imageNamed:@"available_offline_TB-filled"];
     } else {
         //Change the image to starred
-        _favoriteButtonBar.image = [UIImage imageNamed:@"favoriteTB"];
+        _favoriteButtonBar.image = [UIImage imageNamed:@"available_offline_TB"];
     }
 }
 

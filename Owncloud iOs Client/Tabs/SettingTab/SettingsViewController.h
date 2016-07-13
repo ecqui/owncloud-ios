@@ -20,7 +20,6 @@
 #import <MessageUI/MessageUI.h>
 #import "UserDto.h"
 #import "KKPasscodeViewController.h"
-#import "ManageLocation.h"
 #import "AccountCell.h"
 #import "AddAccountViewController.h"
 #import "MBProgressHUD.h"
@@ -35,12 +34,13 @@ typedef enum {
     
 } enumInfoSetting;
 
-@interface SettingsViewController : UIViewController <UITableViewDataSource, UITableViewDelegate, UIActionSheetDelegate, MFMailComposeViewControllerDelegate, KKPasscodeViewControllerDelegate, ManageLocationDelegate, AccountCellDelegate, AddAccountDelegate, MBProgressHUDDelegate, SyncFolderManagerDelegate>
+@interface SettingsViewController : UIViewController <UITableViewDataSource, UITableViewDelegate, UIActionSheetDelegate, MFMailComposeViewControllerDelegate, KKPasscodeViewControllerDelegate, AccountCellDelegate, AddAccountDelegate, MBProgressHUDDelegate, SyncFolderManagerDelegate>
 
 @property(nonatomic,strong)IBOutlet UITableView *settingsTableView;
 @property(nonatomic,strong)UISwitch *switchPasscode;
 @property(nonatomic,strong)UISwitch *switchTouchID;
 @property(nonatomic,strong)UISwitch *switchInstantUpload;
+@property(nonatomic,strong)UISwitch *switchBackgroundInstantUpload;
 @property(nonatomic, strong)DetailViewController *detailViewController;
 @property(nonatomic, strong)UserDto *user;
 
@@ -58,10 +58,13 @@ typedef enum {
 @property(nonatomic, strong) MBProgressHUD  *HUD;
 @property(nonatomic, strong) dispatch_semaphore_t semaphoreChangeUser;
 
+@property (nonatomic,strong) UIActionSheet *menuAccountActionSheet;
+@property (nonatomic,strong) UserDto *selectedUserAccount;
+
 - (IBAction)changeSwitchPasscode:(id)sender;
 - (IBAction)changeSwitchTouchID:(id)sender;
 - (IBAction)changeSwitchInstantUpload:(id)sender;
 - (void)disconnectUser;
-- (void)initStateInstantUpload;
+- (void)showMenuAccountOptions;
 
 @end

@@ -104,7 +104,7 @@ typedef NS_ENUM (NSInteger, enumUpload){
     {
         self.sharedItem = fileDto;
         self.updatedOCShare = sharedDto;
-        self.canEditEnabled = [UtilsFramework isPermissionToCanEdit:self.updatedOCShare.permissions];
+        self.canEditEnabled = [UtilsFramework isAnyPermissionToEdit:self.updatedOCShare.permissions];
         self.canCreateEnabled = [UtilsFramework isPermissionToCanCreate:self.updatedOCShare.permissions];
         self.canChangeEnabled = [UtilsFramework isPermissionToCanChange:self.updatedOCShare.permissions];
         self.canDeleteEnabled = [UtilsFramework isPermissionToCanDelete:self.updatedOCShare.permissions];
@@ -266,10 +266,11 @@ typedef NS_ENUM (NSInteger, enumUpload){
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView{
     
     if (self.updatedOCShare.shareType == shareTypeRemote) {
-        return shareTableViewSectionsNumberRemote;
-    } else {
-        return shareTableViewSectionsNumber;
+        if (!(APP_DELEGATE.activeUser.hasFedSharesOptionShareSupport == serverFunctionalitySupported)) {
+            return shareTableViewSectionsNumberRemote;
+        }
     }
+    return shareTableViewSectionsNumber;
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {

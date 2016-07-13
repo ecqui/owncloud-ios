@@ -78,6 +78,8 @@
 
 + (NSString *) getFullRemoteServerFilePathByFile:(FileDto *) file andUser:(UserDto *) user;
 
++ (NSString *) getFullRemoteServerParentPathByFile:(FileDto *) file andUser:(UserDto *) user;
+
 + (NSString *) getUserAgent;
 
 + (BOOL) isFileUploadingWithPath:(NSString *)path andUser: (UserDto *) user;
@@ -95,5 +97,11 @@
  *                          -> Documents/File.pdf
  */
 + (NSString *) getKeyByLocalFolder:(NSString *) localFolder;
+
++ (NSString *) getFileLocalSystemPathByFullPath:(NSString *)fullRemotePath andUser:(UserDto *)user;
+
++ (NSString *) getFileLocalSystemPathByFileDto:(FileDto *)fileDto andUser:(UserDto *)user;
+
++ (NSString *) getLocalCertificatesPath;
 
 @end

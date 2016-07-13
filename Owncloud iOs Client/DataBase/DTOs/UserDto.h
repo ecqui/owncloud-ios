@@ -43,10 +43,12 @@ typedef enum {
 @property NSInteger hasCookiesSupport;
 @property NSInteger hasForbiddenCharactersSupport;
 @property NSInteger hasCapabilitiesSupport;
+@property NSInteger hasFedSharesOptionShareSupport;
 @property BOOL instantUpload;
+@property BOOL backgroundInstantUpload;
 @property (nonatomic, copy) NSString *pathInstantUpload;
 @property BOOL onlyWifiInstantUpload;
-@property long dateInstantUpload;
+@property NSTimeInterval timestampInstantUpload;
 @property (nonatomic, copy) NSString *urlRedirected;
 @property (nonatomic, strong) CapabilitiesDto *capabilitiesDto;
 @property enumSortingType sortingType;
