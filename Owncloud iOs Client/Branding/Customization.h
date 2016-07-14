@@ -23,13 +23,13 @@
 #define k_send_feedback @"http://owncloud.com/mobile/feedback"
 
 //Hide url server
-#define k_hide_url_server NO
+#define k_hide_url_server YES
 
 //Set a default url server. It must be obligaroy if we hide the url server (#define k_hide_url_server YES)
-#define k_default_url_server @""
+#define k_default_url_server @"https://projektservice.svdgmbh.at"
 
 //Show multiaccount or disconnect
-#define k_multiaccount_available YES
+#define k_multiaccount_available NO
 
 //Have icon on backbutton
 #define k_have_icon_on_popover YES
@@ -140,7 +140,7 @@
 #define k_hide_share_options NO
 
 //Help Guide init app
-#define k_show_main_help_guide YES
+#define k_show_main_help_guide NO
 
 //Show share with users
 #define k_is_share_with_users_available YES
