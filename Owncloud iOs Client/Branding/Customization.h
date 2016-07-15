@@ -15,7 +15,7 @@
 
 
 //app year
-#define k_year 2016
+#define k_year 2015
 
 //URLs Setting
 #define k_help_url @"http://owncloud.com/mobile/help"
@@ -23,13 +23,13 @@
 #define k_send_feedback @"http://owncloud.com/mobile/feedback"
 
 //Hide url server
-#define k_hide_url_server NO
+#define k_hide_url_server YES
 
 //Set a default url server. It must be obligaroy if we hide the url server (#define k_hide_url_server YES)
-#define k_default_url_server @""
+#define k_default_url_server @"https://sbox-sva.svdgmbh.at/"
 
 //Show multiaccount or disconnect
-#define k_multiaccount_available YES
+#define k_multiaccount_available NO
 
 //Have icon on backbutton
 #define k_have_icon_on_popover YES
@@ -65,13 +65,13 @@
 #define k_show_logo_on_title_file_list YES
 
 //Show help
-#define k_show_help_option_on_settings YES
+#define k_show_help_option_on_settings NO
 
 //Show social
-#define k_show_recommend_option_on_settings YES
+#define k_show_recommend_option_on_settings NO
 
 //Show feedback
-#define k_show_feedback_option_on_settings YES
+#define k_show_feedback_option_on_settings NO
 
 //Show impressum
 #define k_show_imprint_option_on_settings NO
@@ -83,7 +83,7 @@
 #define k_is_customize_uitabbar YES
 
 //Customize Unselected UITabBarItems (The images of tabBar should be the unseleted tabs)
-#define k_is_customize_unselectedUITabBarItems NO
+#define k_is_customize_unselectedUITabBarItems YES
 
 //Set Image on Preview Bottom toolBar on iPhone
 #define k_set_image_on_preview_bottom_toolBar_on_iPhone NO
@@ -120,11 +120,8 @@
 //Number of uploads shown in recents tab from the database
 #define k_number_uploads_shown 30
 
-//Set text of status bar white. YES = White | NO = Black
-#define k_is_text_status_bar_white YES
-
-//Set text of login view status bar white. YES = White | NO = Black
-#define k_is_text_login_status_bar_white NO
+//Set text of status bar white only for iOS 7. YES = White | NO = Black
+#define k_is_text_status_bar_white NO
 
 //Show the help link on login
 #define k_is_shown_help_link_on_login NO
@@ -140,10 +137,4 @@
 #define k_hide_share_options NO
 
 //Help Guide init app
-#define k_show_main_help_guide YES
-
-//Show share with users
-#define k_is_share_with_users_available YES
-
-//Show share by link
-#define k_is_share_by_link_available YES
+#define k_show_main_help_guide NO
