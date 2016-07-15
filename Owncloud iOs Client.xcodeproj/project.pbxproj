@@ -937,6 +937,7 @@
 		EAF771311B73523800ED6E6E /* SystemConstants-swift.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAF771301B73523800ED6E6E /* SystemConstants-swift.swift */; };
 		EAFDF1771A76372A00655DBF /* NSString+Encoding.m in Sources */ = {isa = PBXBuildFile; fileRef = EAABAB2918585CD700909831 /* NSString+Encoding.m */; };
 		EAFE20A81AC4617D00BB888E /* UIImage+Resize.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAFE20A71AC4617D00BB888E /* UIImage+Resize.swift */; };
+		F74A31A71D38B62C00DBBB2E /* LounchScreen.jpg in Resources */ = {isa = PBXBuildFile; fileRef = F74A31A61D38B62C00DBBB2E /* LounchScreen.jpg */; };
 		FCE228D11CFE08EF00E4827F /* InstantUpload.m in Sources */ = {isa = PBXBuildFile; fileRef = FCE228D01CFE08EF00E4827F /* InstantUpload.m */; };
 /* End PBXBuildFile section */
 
@@ -1880,6 +1881,7 @@
 		EAF7712B1B7340C400ED6E6E /* ShareLinkButtonCell.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; name = ShareLinkButtonCell.xib; path = Tabs/FileTab/Share/Cells/ShareLinkButtonCell.xib; sourceTree = "<group>"; };
 		EAF771301B73523800ED6E6E /* SystemConstants-swift.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = "SystemConstants-swift.swift"; path = "Utils/SystemConstants-swift.swift"; sourceTree = "<group>"; };
 		EAFE20A71AC4617D00BB888E /* UIImage+Resize.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = "UIImage+Resize.swift"; sourceTree = "<group>"; };
+		F74A31A61D38B62C00DBBB2E /* LounchScreen.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = LounchScreen.jpg; sourceTree = "<group>"; };
 		FCE228CF1CFE08EF00E4827F /* InstantUpload.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = InstantUpload.h; sourceTree = "<group>"; };
 		FCE228D01CFE08EF00E4827F /* InstantUpload.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = InstantUpload.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -3305,6 +3307,7 @@
 		59F470341C5F9AF4005B6091 /* SplashScreen */ = {
 			isa = PBXGroup;
 			children = (
+				F74A31A61D38B62C00DBBB2E /* LounchScreen.jpg */,
 				593D14881C60BE1E005161E2 /* SplashImage.png */,
 			);
 			name = SplashScreen;
@@ -4281,6 +4284,7 @@
 				14A6115919346D0000AECA34 /* sharedItemSwipe.png in Resources */,
 				40E354CF1A14D6E8000E7FE4 /* deleteTB@3x.png in Resources */,
 				1487F276177C35AA004A1A5A /* server@2x.png in Resources */,
+				F74A31A71D38B62C00DBBB2E /* LounchScreen.jpg in Resources */,
 				4052B4E31B4ECF35000788DA /* btnHelpPage4.png in Resources */,
 				1487F277177C35AA004A1A5A /* user.png in Resources */,
 				1487F278177C35AA004A1A5A /* user@2x.png in Resources */,
